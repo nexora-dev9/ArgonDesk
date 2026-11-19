@@ -1,11 +1,19 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import { randomUUID } from 'node:crypto';
+import { readFile, assertTextWrite } from './file-reader.mjs';
+import { runCommand, searchWorkspace, managePath } from './workspace-agent.mjs';
 
 const MAX_BYTES = 2 * 1024 * 1024;
 export class WorkspaceFiles {
-  constructor(config, save = () => {}) { this.config = config; this.save = save; }
+  constructor(config, save = () => {}) { this.config = config; this.save = save; this.pendingCommands = new Set(); }
+  cancelCommands() {
+    const items = [...this.pendingCommands];
+    for (const item of items) item.cancel();
+    return Promise.allSettled(items.map(item => item.done));
+  }
   configure(update) {
+    this.cancelCommands();
     const next = { ...this.config, ...update, enabled: false, workspaceId: randomUUID() };
     next.root = fs.realpathSync(next.root);
     if (!fs.statSync(next.root).isDirectory()) throw new Error('请选择现有文件夹。');
@@ -16,7 +24,7 @@ export class WorkspaceFiles {
   }
   info() {
     const { root, access, enabled, workspaceId } = this.config;
-    return { workspace: root, workspace_id: workspaceId, access, enabled };
+    return { workspace: root, workspace_id: workspaceId, access, enabled, allow_commands: this.config.allowCommands === true, allow_file_management: this.config.allowFileManagement === true };
   }
   check(id, write = false) {
     if (!this.config.enabled) throw new Error('工作区已暂停，请在本地工作台启用。');
@@ -55,26 +63,32 @@ export class WorkspaceFiles {
       this.check(this.config.workspaceId);
       return this.info();
     }
+    if (name === 'find_files' || name === 'search_text') return searchWorkspace(this, name, args);
+    if (name === 'run_command') return runCommand(this, args);
+    if (name === 'move_path' || name === 'delete_path') return managePath(this, name, args);
     const write = ['write_file', 'edit_file', 'create_directory'].includes(name);
     this.check(args.workspace_id, write);
     if (!['list_files', 'read_file', 'write_file', 'edit_file', 'create_directory'].includes(name)) throw new Error('此工具未提供。');
     const target = this.resolve(args.path || '.', write);
+    if (['write_file', 'edit_file'].includes(name)) assertTextWrite(target);
     if (name === 'list_files') {
-      return fs.readdirSync(target, { withFileTypes: true }).slice(0, 500).map(item => ({
+      const offset = args.offset ?? 0, limit = args.limit ?? 500;
+      if (!Number.isSafeInteger(offset) || offset < 0 || !Number.isInteger(limit) || limit < 1 || limit > 1000) throw new Error('目录读取范围无效。');
+      const items = fs.readdirSync(target, { withFileTypes: true }).sort((a, b) => a.name < b.name ? -1 : a.name > b.name ? 1 : 0);
+      const entries = items.slice(offset, offset + limit).map(item => ({
         name: item.name, type: item.isSymbolicLink() ? 'blocked_link' : item.isDirectory() ? 'directory' : 'file'
       }));
+      return { path: args.path || '.', total_entries: items.length, offset, entries, has_more: offset + limit < items.length,
+        next_offset: offset + limit < items.length ? offset + limit : null };
     }
     if (name === 'create_directory') {
       fs.mkdirSync(target, { recursive: true });
       return { created: args.path };
     }
     if (name === 'read_file') {
-      const stat = fs.statSync(target);
-      if (!stat.isFile() || stat.size > MAX_BYTES) throw new Error('仅支持不超过 2 MiB 的普通文件。');
-      const lines = fs.readFileSync(target, 'utf8').split('\n');
-      const offset = args.offset ?? 0, count = args.lines ?? 200;
-      if (!Number.isInteger(offset) || offset < 0 || !Number.isInteger(count) || count < 1 || count > 1000) throw new Error('读取范围无效。');
-      return { path: args.path, total_lines: lines.length, offset, text: lines.slice(offset, offset + count).join('\n') };
+      const value = readFile(target, args);
+      if (value?.then) return value.then(result => { this.check(args.workspace_id); this.resolve(args.path); return result; });
+      return value;
     }
     let content = args.content;
     let editsApplied = 0;
@@ -85,9 +99,18 @@ export class WorkspaceFiles {
       const stat = fs.statSync(target);
       if (!stat.isFile() || stat.size > MAX_BYTES) throw new Error('仅支持不超过 2 MiB 的普通文件。');
       content = fs.readFileSync(target, 'utf8');
+      const eol = content.match(/\r\n|\n/)?.[0] || '\n';
       for (const edit of edits) {
-        if (content.split(edit.old_text).length - 1 !== 1) throw new Error('待替换文本必须恰好匹配一次，请先读取文件。');
-        content = content.replace(edit.old_text, () => edit.new_text);
+        const normalized = content.replace(/\r\n/g, '\n'), old = edit.old_text.replace(/\r\n/g, '\n');
+        const index = normalized.indexOf(old);
+        if (index < 0 || normalized.indexOf(old, index + 1) >= 0) throw new Error('待替换文本必须恰好匹配一次，请先读取文件。');
+        let raw = 0, position = 0, start = 0;
+        while (position < index + old.length) {
+          if (position === index) start = raw;
+          if (content[raw] === '\r' && content[raw + 1] === '\n') raw++;
+          raw++; position++;
+        }
+        content = content.slice(0, start) + edit.new_text.replace(/\r\n/g, '\n').replace(/\n/g, eol) + content.slice(raw);
       }
       editsApplied = edits.length;
     }

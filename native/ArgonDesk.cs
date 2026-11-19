@@ -51,6 +51,12 @@ internal static class ArgonDesk
     }
     private static void OpenPanel()
     {
+        try { using (var client = new LocalClient()) {
+            var saved = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(client.DownloadString(Address + "/api/state"));
+            client.Headers["Content-Type"] = "application/json";
+            client.Headers["X-Workspace-Csrf"] = Convert.ToString(saved["csrf"]);
+            client.UploadString(Address + "/api/startup/restore", "POST", "{}");
+        } } catch { }
         var window = FindWindow(null, WindowTitle);
         if (window == IntPtr.Zero) window = FindWindow(null, T("ArgonDesk — Gemini Workspace", "ArgonDesk — Gemini 工作台"));
         if (window != IntPtr.Zero) { ShowWindow(window, 9); SetForegroundWindow(window); return; }

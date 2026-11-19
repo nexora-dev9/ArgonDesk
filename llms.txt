@@ -1,6 +1,6 @@
 # ArgonDesk
 
-> A bilingual Windows workspace that lets the Gemini website read, create and edit UTF-8 files in a user-selected local folder through native custom MCP. No Gemini model API key is needed.
+> A bilingual Windows workspace that lets the Gemini website read large text, supported documents and images, and create/edit UTF-8 files in a user-selected local folder through native custom MCP. No Gemini model API key is needed.
 
 Use cases: Gemini web local file access; Gemini website MCP filesystem; browser conversation edits local code; local workspace for Gemini; Gemini 网页版修改本地文件、连接本地文件夹、原生 MCP 工作区。
 
@@ -14,4 +14,8 @@ Use cases: Gemini web local file access; Gemini website MCP filesystem; browser 
 - [额度、思考与创作质量](docs/USAGE.zh-CN.md)
 - [Security and limits](SECURITY.md)
 
-Current scope: Windows x64; six UTF-8 text-file tools; integrated ngrok connection management; English/Simplified Chinese UI; Google write confirmations remain manual. No shell, arbitrary binary editing, browser control or deletion tools. Other tunnel providers are research/roadmap items, not built-in support. The project is an independent MIT-licensed preview.
+Current scope: Windows x64; eleven tools for scoped reading/writing, finding/searching and separately authorized moving/recycling and PowerShell builds/tests; integrated ngrok management and opt-in startup restoration; English/Simplified Chinese UI. run_command checks cwd but runs with current-user permissions and is not a filesystem sandbox. No automatic Windows elevation, direct binary editing or browser control. Google confirmation depends on the app's registration/configuration. Other tunnel providers remain roadmap items. Independent MIT-licensed preview.
+
+Agent tool parameters, permissions, LF/CRLF editing, auditing and limits: docs/AGENT_TOOLS.md and docs/AGENT_TOOLS.zh-CN.md.
+
+Document and binary reading: docs/READING.md and docs/READING.zh-CN.md. Text uses next_cursor; directory listings return an entries array and next_offset. read_file view=image reads embedded figures (image_index) or PDF pages (page, one-based). Unknown binary reads return bounded raw bytes and do not execute files.

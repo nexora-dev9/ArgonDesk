@@ -15,12 +15,19 @@ function secret(mode, value) {
     child.stdin.end(value);
   });
 }
+export const protectSecret = value => secret('Protect', value);
+export const unprotectSecret = value => secret('Unprotect', value);
 export function validateDomain(value) {
   const text = value.trim().replace(/\/$/, '');
   const url = new URL(text.includes('://') ? text : 'https://' + text);
   if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash || url.pathname !== '/' || url.port ||
       !/^[a-z0-9-]+\.ngrok(?:-free)?\.(?:app|dev|io)$/.test(url.hostname)) throw new Error('请输入 ngrok 账户中的 HTTPS 开发域名，不含路径或连接密钥。');
   return url.origin;
+}
+export function buildTrafficPolicy(config) {
+  const allowedPaths = ['/mcp', `/mcp/${config.key}`, '/.well-known/google-connected-apps', '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/oauth/token', '/privacy', '/terms', '/help'];
+  const blockedExpression = allowedPaths.map(value => `req.url.path != '${value}'`).join(' && ');
+  return { on_http_request: [{ expressions: [blockedExpression], actions: [{ type: 'custom-response', config: { status_code: 404, body: 'Not found', headers: { 'content-type': 'text/plain' } } }] }] };
 }
 export class Tunnel {
   constructor({ base, stateRoot, port, getConfig, update }) {
@@ -71,7 +78,7 @@ export class Tunnel {
     if (generation !== this.generation) return this.info();
     const policyPath = path.join(this.stateRoot, 'tunnel-policy.json');
     const agentPath = path.join(this.stateRoot, 'ngrok-agent.yml');
-    fs.writeFileSync(policyPath, JSON.stringify({ on_http_request: [{ expressions: [`req.url.path != '/mcp/${config.key}'`], actions: [{ type: 'custom-response', config: { status_code: 404, body: 'Not found', headers: { 'content-type': 'text/plain' } } }] }] }));
+    fs.writeFileSync(policyPath, JSON.stringify(buildTrafficPolicy(config)));
     fs.writeFileSync(agentPath, 'version: 3\nagent:\n  web_addr: false\n  update_check: false\n  remote_management: false\n');
     const env = { ...process.env, NGROK_AUTHTOKEN: token };
     // Avoid ngrok's paid explicit HTTP proxy mode; OS routing may still select an egress.

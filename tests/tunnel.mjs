@@ -4,7 +4,7 @@ import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import { Tunnel, validateDomain } from '../tunnel.mjs';
+import { Tunnel, validateDomain, buildTrafficPolicy } from '../tunnel.mjs';
 
 const base = fileURLToPath(new URL('../', import.meta.url));
 const stateRoot = path.join(base, '.local', 'tests', 'tunnel-' + randomUUID());
@@ -30,6 +30,11 @@ assert.equal(fs.readFileSync(tunnel.tokenPath,'utf8'),encrypted);
 await tunnel.configure({domain:'sample.ngrok-free.dev',token:'',autoStart:true});
 assert.equal(config.tunnelAutoStart,true);
 assert.equal(fs.readFileSync(tunnel.tokenPath,'utf8'),encrypted);
+const policyExpression = buildTrafficPolicy({ key: 'test-capability-key' }).on_http_request[0].expressions[0];
+for (const route of ['/mcp', '/mcp/test-capability-key', '/.well-known/google-connected-apps', '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/oauth/token', '/privacy', '/terms', '/help']) {
+  assert.ok(policyExpression.includes(`req.url.path != '${route}'`));
+}
+assert.ok(policyExpression.includes(' && '));
 await tunnel.stop();
 assert.equal(tunnel.info().status,'stopped');
-console.log(JSON.stringify({passed:true,checks:['ngrok domain validation','Windows DPAPI round trip','saved credential never returned in status','invalid settings preserve credential','empty token keeps saved credential','stop with no child is safe'],networkConnectionsStarted:0}));
+console.log(JSON.stringify({passed:true,checks:['ngrok domain validation','Windows DPAPI round trip','saved credential never returned in status','invalid settings preserve credential','empty token keeps saved credential','public route allowlist','stop with no child is safe'],networkConnectionsStarted:0}));

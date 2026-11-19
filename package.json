@@ -1,22 +1,30 @@
 {
   "name": "argondesk",
-  "version": "0.4.2",
+  "version": "0.4.6",
   "private": true,
   "description": "Local folder-scoped MCP tools and a bilingual Windows workspace for the Gemini website",
   "type": "module",
   "engines": {
-    "node": ">=22"
+    "node": ">=22.13.0"
   },
   "scripts": {
     "start": "node server.mjs",
-    "test": "node tests/workspace.mjs && node tests/startup.mjs"
+    "test": "node tests/oauth.mjs && node tests/workspace.mjs && node tests/reading.mjs && node tests/startup.mjs && node tests/tunnel.mjs && node tests/agent-tools.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",
+    "@napi-rs/canvas": "1.1.0",
     "express": "4.22.3",
+    "officeparser": "8.2.0",
+    "pdfjs-dist": "6.2.108",
+    "sharp": "0.35.5",
+    "yauzl": "3.4.0",
     "zod": "3.25.76"
   },
   "license": "MIT",
+  "devDependencies": {
+    "fflate": "0.8.3"
+  },
   "keywords": [
     "gemini",
     "gemini-web",

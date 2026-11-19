@@ -18,7 +18,7 @@ const stateDir = path.join(fixture, 'state');
 for (const directory of [root, second, stateDir]) fs.mkdirSync(directory, { recursive: true });
 const outside = path.join(fixture, 'outside.txt');
 fs.writeFileSync(outside, 'OUTSIDE_MUST_STAY_UNCHANGED');
-const config = { root, workspaceId: randomUUID(), enabled: true, access: 'edit', key: randomUUID().replaceAll('-', ''), publicBase: '' };
+const config = { root, workspaceId: randomUUID(), enabled: true, access: 'edit', key: randomUUID().replaceAll('-', ''), publicBase: 'https://public.example' };
 const files = new WorkspaceFiles(config);
 const args = { workspace_id: config.workspaceId, path: 'sample.txt' };
 const checks = [];
@@ -65,10 +65,13 @@ check('Only a unique edit match is accepted', () => {
   files.run('write_file', { ...args, path: 'duplicate.txt', content: 'aa aa' });
   assert.throws(() => files.run('edit_file', { ...args, path: 'duplicate.txt', old_text: 'aa', new_text: 'BAD' }));
 });
-check('Oversized writes and reads are rejected', () => {
+check('Oversized writes stay blocked while large text reads are paginated', () => {
   assert.throws(() => files.run('write_file', { ...args, content: 'x'.repeat(2 * 1024 * 1024 + 1) }));
-  fs.writeFileSync(path.join(root, 'big.txt'), Buffer.alloc(2 * 1024 * 1024 + 1));
-  assert.throws(() => files.run('read_file', { ...args, path: 'big.txt' }));
+  fs.writeFileSync(path.join(root, 'big.txt'), 'x'.repeat(2 * 1024 * 1024 + 1));
+  const large = files.run('read_file', { ...args, path: 'big.txt' });
+  assert.equal(large.text.length, 48000);
+  assert.equal(large.has_more, true);
+  assert.ok(large.next_cursor);
 });
 check('Batch edits apply together and a later mismatch leaves the file unchanged', () => {
   const batch = { ...args, path: 'batch.txt' };
@@ -110,6 +113,52 @@ const address = 'http://127.0.0.1:' + port;
 async function post(route, value, csrf) {
   return fetch(address + route, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(csrf ? { 'X-Workspace-Csrf': csrf } : {}) }, body: JSON.stringify(value) });
 }
+async function getPublic(route) {
+  return new Promise((resolve, reject) => {
+    const request = http.get(address + route, { headers: { Host: 'public.example' } }, response => {
+      let body = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { body += chunk; });
+      response.on('end', () => resolve({ status: response.statusCode, body }));
+    });
+    request.on('error', reject);
+  });
+}
+async function postPublicForm(route, fields, authorization = '') {
+  const body = new URLSearchParams(fields).toString();
+  return new Promise((resolve, reject) => {
+    const request = http.request(address + route, {
+      method: 'POST',
+      headers: { Host: 'public.example', 'Content-Type': 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body), ...(authorization ? { Authorization: authorization } : {}) }
+    }, response => {
+      let text = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { text += chunk; });
+      response.on('end', () => resolve({ status: response.statusCode, body: text }));
+    });
+    request.on('error', reject);
+    request.end(body);
+  });
+}
+async function postPublicMcp(token = '', legacy = false) {
+  const body = JSON.stringify({
+    jsonrpc: '2.0', id: 1, method: 'initialize',
+    params: { protocolVersion: '2025-06-18', capabilities: {}, clientInfo: { name: 'oauth-test', version: '1.0' } }
+  });
+  return new Promise((resolve, reject) => {
+    const request = http.request(address + (legacy ? '/mcp/' + config.key : '/mcp'), {
+      method: 'POST',
+      headers: { Host: 'public.example', 'Content-Type': 'application/json', Accept: 'application/json, text/event-stream', 'MCP-Protocol-Version': '2025-06-18', ...(token ? { Authorization: 'Bearer ' + token } : {}) }
+    }, response => {
+      let text = '';
+      response.setEncoding('utf8');
+      response.on('data', chunk => { text += chunk; });
+      response.on('end', () => resolve({ status: response.statusCode, body: text }));
+    });
+    request.on('error', reject);
+    request.end(body);
+  });
+}
 try {
   await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error('Test server did not start: ' + stderr)), 8000);
@@ -143,6 +192,53 @@ try {
   assert.equal((await fetch(address+'/i18n.js')).status,200);
   checks.push({ name: 'Language preference persists without changing workspace authority and requires CSRF', passed: true });
   assert.equal((await fetch(address + '/api/state', { headers: { Origin: 'https://unrelated.example' } })).status, 403);
+  assert.equal((await getPublic('/.well-known/google-connected-apps')).status, 404);
+  const verificationJson = JSON.stringify({ verification_tokens: ['local-test-verification-token'] });
+  assert.equal((await post('/api/connected-apps/verification', { verification: verificationJson }, state.csrf)).status, 200);
+  const verificationState = await (await fetch(address + '/api/state')).json();
+  assert.equal(verificationState.connectedAppVerificationConfigured, true);
+  assert.equal(JSON.stringify(verificationState).includes('local-test-verification-token'), false);
+  const verificationResponse = await getPublic('/.well-known/google-connected-apps');
+  assert.equal(verificationResponse.status, 200);
+  assert.deepEqual(JSON.parse(verificationResponse.body), { verification_tokens: ['local-test-verification-token'] });
+  assert.equal((await post('/api/connected-apps/verification', { verification: '{"verification_tokens":[]}' }, state.csrf)).status, 400);
+  for (const route of ['/privacy', '/terms', '/help']) assert.equal((await getPublic(route)).status, 200);
+  assert.equal((await getPublic('/api/state')).status, 403);
+  checks.push({ name: 'Google domain challenge and public policy pages are reachable only on the configured public host', passed: true });
+  const oauthMeta = await getPublic('/.well-known/oauth-authorization-server');
+  const oauthResource = await getPublic('/.well-known/oauth-protected-resource');
+  assert.equal(oauthMeta.status, 200);
+  assert.equal(oauthResource.status, 200);
+  const oauthMetadata = JSON.parse(oauthMeta.body);
+  assert.equal(oauthMetadata.grant_types_supported.includes('client_credentials'), true);
+  const resourceMetadata = JSON.parse(oauthResource.body);
+  assert.equal(resourceMetadata.resource, 'https://public.example/mcp');
+  const credentialsResponse = await post('/api/oauth/credentials', {}, state.csrf);
+  assert.equal(credentialsResponse.status, 200);
+  const credentials = await credentialsResponse.json();
+  const credentialsState = await (await fetch(address + '/api/state')).json();
+  assert.equal(credentialsState.oauthCredentialsConfigured, true);
+  assert.equal(credentialsState.oauthClientId, credentials.clientId);
+  assert.equal(JSON.stringify(credentialsState).includes(credentials.clientSecret), false);
+  const tokenResponse = await postPublicForm('/oauth/token', {
+    grant_type: 'client_credentials', client_id: credentials.clientId, client_secret: credentials.clientSecret, scope: 'mcp'
+  });
+  assert.equal(tokenResponse.status, 200);
+  const token = JSON.parse(tokenResponse.body).access_token;
+  assert.equal((await postPublicForm('/oauth/token', {
+    grant_type: 'client_credentials', client_id: credentials.clientId, client_secret: 'wrong-secret'
+  })).status, 401);
+  const basic = 'Basic ' + Buffer.from(credentials.clientId + ':' + credentials.clientSecret).toString('base64');
+  assert.equal((await postPublicForm('/oauth/token', { grant_type: 'client_credentials', scope: 'mcp' }, basic)).status, 200);
+  assert.equal((await postPublicMcp()).status, 401);
+  const authenticatedMcp = await postPublicMcp(token);
+  assert.equal(authenticatedMcp.status, 200);
+  assert.equal((await postPublicMcp('', true)).status, 200);
+  assert.equal((await post('/api/oauth/require', { required: true }, state.csrf)).status, 200);
+  assert.equal((await postPublicMcp('', true)).status, 401);
+  assert.equal((await post('/api/oauth/require', { required: false }, state.csrf)).status, 200);
+  assert.equal((await postPublicMcp('', true)).status, 200);
+  checks.push({ name: 'Machine-to-machine OAuth token exchange and public MCP bearer enforcement', passed: true });
   const publicStatus = await new Promise((resolve, reject) => {
     const request = http.get(address + '/api/state', { headers: { Host: 'public.example' } }, response => { response.resume(); resolve(response.statusCode); });
     request.on('error', reject);
@@ -153,10 +249,10 @@ try {
   checks.push({ name: 'MCP capability credential required', passed: true });
   await client.connect(new StreamableHTTPClientTransport(new URL(state.localMcp)));
   assert.equal(client.getServerVersion().name, 'ArgonDesk');
-  assert.match(client.getInstructions(), /Preserve requested detail, motion and interactivity/);
+  assert.match(client.getInstructions(), /Preserve requested detail, animation and interactivity/);
   const tools = (await client.listTools()).tools;
-  assert.deepEqual(tools.map(tool => tool.name).sort(), ['workspace_info', 'list_files', 'read_file', 'write_file', 'edit_file', 'create_directory'].sort());
-  checks.push({ name: 'Real SDK handshake and exactly six file tools', passed: true });
+  assert.deepEqual(tools.map(tool => tool.name).sort(), ['workspace_info', 'list_files', 'read_file', 'write_file', 'edit_file', 'create_directory', 'find_files', 'search_text', 'move_path', 'delete_path', 'run_command'].sort());
+  checks.push({ name: 'Real SDK handshake and eleven workspace tools', passed: true });
   assert.equal((await client.callTool({ name: 'workspace_info', arguments: {} })).isError, true);
   await post('/api/settings', { enabled: true }, state.csrf);
   const infoResult = await client.callTool({ name: 'workspace_info', arguments: {} });
@@ -180,7 +276,7 @@ try {
   checks.push({ name: 'Real MCP schema accepts multiple replacements in a single tool request', passed: true });
   const listing = await client.callTool({ name: 'list_files', arguments: { workspace_id: info.workspace_id, path: '.' } });
   assert.equal(listing.structuredContent, undefined);
-  assert.ok(Array.isArray(JSON.parse(listing.content[0].text)));
+  assert.ok(Array.isArray(JSON.parse(listing.content[0].text).entries));
   checks.push({ name: 'MCP results keep one canonical JSON text payload without a duplicate structured copy', passed: true });
   const beforeCreate = (await (await fetch(address + '/api/state')).json()).history.length;
   const fresh = JSON.parse((await client.callTool({ name: 'workspace_info', arguments: {} })).content[0].text);
