@@ -1,8 +1,8 @@
 ﻿#requires -Version 5.1
 $ErrorActionPreference = 'Stop'
 $nodeCommand = Get-Command node.exe -ErrorAction Stop
-$nodeMajor = [int]((& $nodeCommand.Source --version) -replace '^v(\d+)\..*$', '$1')
-if ($nodeMajor -lt 22) { throw 'Install Node.js 22 or newer from https://nodejs.org/ first.' }
+$nodeVersion = [version]((& $nodeCommand.Source --version) -replace '^v', '')
+if ($nodeVersion -lt [version]'22.13.0') { throw 'Install Node.js 22.13 or newer from https://nodejs.org/ first.' }
 Push-Location $PSScriptRoot
 try {
     & npm.cmd ci --ignore-scripts --no-audit --no-fund --cache (Join-Path $PSScriptRoot '.local\npm-cache')

@@ -32,7 +32,9 @@ Setup 安装锁定的 npm 依赖与官方连接客户端；Build 调用 Windows 
 
 ## 4. 添加官网原生应用
 
-复制工作台中的私人 MCP URL。打开 [Gemini Connected Apps](https://gemini.google.com/customize/connectors?hl=en)，添加自定义应用，填写该地址，命名 ArgonDesk，按官网当前页面完成。之后刷新并查看是否能发现六项工具。
+普通接入：复制工作台中的私人 MCP URL。打开 [Gemini Connected Apps](https://gemini.google.com/customize/connectors?hl=en)，添加自定义应用，填写该地址，命名 ArgonDesk，按官网当前页面完成。该方式的写操作仍需逐次 Allow。
+
+若希望免去逐次 Allow，需使用 Google Connected Apps Platform 注册式应用，而不是普通自定义应用。按[注册式 Connected App 指南](CONNECTED_APPS_PLATFORM.zh-CN.md)完成预览准入、域名验证、工具同步和逐工具确认配置。
 
 完整 URL 相当于密码，不要贴公开 Issue，也不要发到无关对话。本机设置面板地址不是要注册的 MCP 地址；Google 服务器不能直接连接你的 localhost。
 
@@ -44,7 +46,7 @@ Setup 安装锁定的 npm 依赖与官方连接客户端；Build 调用 Windows 
 
 此前验证成功的路径是英文官网 → Task → Argon。这是已测路径，不是永久限制。输入 @ 后从菜单点选原生应用。
 
-让 Gemini 查询工作区、新建一个名称唯一的小文本文件，再读回；核对写入卡片并点 Allow。最后在磁盘和“操作记录”核对结果。
+让 Gemini 查询工作区、新建一个名称唯一的小文本文件，再读回。普通自定义应用会显示 Allow；注册式 Connected App 则按 Console 中的逐工具确认设置执行。最后在磁盘和“操作记录”核对结果。
 
 隧道在线、握手和工具列表不等于模型真的读写文件。黑色调用代码块也不等于执行。无法调用时，保留证据，另开原生应用任务，不要继续混用旧 Insert 流程。
 

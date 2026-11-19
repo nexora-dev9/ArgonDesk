@@ -16,7 +16,7 @@
 
 ## 为什么一直要 Allow
 
-这是 Google 的人工写入确认，同意一次不等于后续全部免确认。让模型把同一文件的相关替换合并到 edit_file 的 edits 数组，减少调用。本软件不自动点击或关闭确认。
+普通自定义 MCP 应用会由 Gemini 对每次写入要求确认。若要免逐次弹窗，需改用注册式 Connected Apps Platform，并在 Connected Console 对 write_file、edit_file、create_directory 取消 User confirmation required。详见[注册指南](CONNECTED_APPS_PLATFORM.zh-CN.md)。工作台不自动点击或伪装写入工具。
 
 ## 隧道 connecting，或者在线但文件没有变化
 

@@ -1,4 +1,4 @@
-# Daily workflow · 0.4.2
+# Daily workflow · 0.4.6
 
 [简体中文](使用说明.md) · [Full guide](README.md)
 
@@ -8,13 +8,13 @@
 4. Describe what should be done in the current workspace. Review and approve the website's Allow card for writes.
 5. Check Activity and the actual files.
 
-Use the gear button → Preferences for language and **Enable file access on startup**. This optional setting restores the saved folder and permission on restart; it defaults off. While on, a manual pause lasts for this run. Folder or permission changes still pause immediately. Restarting refreshes the workspace ID, not the private connection URL.
+Use **gear → Preferences** for language, tunnel/file autostart and separate file-management/command grants. Opening restores opted-in startup settings. Folder/access changes still pause immediately. Commands run as the current Windows user and can access other folders; they are not filesystem-sandboxed. Clean installs require explicit grants. Restarting refreshes the workspace ID, not the private URL. See [tool parameters and builds/tests](docs/AGENT_TOOLS.md).
 
 For a new file, ask for one workspace lookup followed by a complete create-only write. If animation is required, explicitly request actual playback. See [usage and quality](docs/USAGE.md).
 
 For initial setup, save your own ngrok development domain and token in Connection, then register the private URL as a custom Gemini app. Optional auto-connect restores the tunnel on launch. No old browser extension, green overlay or long Insert prompt is required.
 
-**Google currently requires manual write confirmation.** Ask Gemini to combine related changes to the same file into one edit_file edits array to reduce tool calls. This does not remove confirmations.
+**A manually added custom MCP app requires manual write confirmation.** A registered Connected App can configure per-tool confirmation in Google Connected Console; see the registration guide in docs.
 
 “HTTPS online” is connection state; “Tool activity” requires an actual successful remote tool call. A handshake or a code block is not proof of file access.
 

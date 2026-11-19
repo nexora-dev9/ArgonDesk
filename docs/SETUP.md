@@ -32,9 +32,13 @@ Wait for the tunnel status. If it fails, use [Networking](NETWORKING.md) and [Tr
 
 ## 4. Register the custom app
 
-Copy the private MCP URL from ArgonDesk. Open [Gemini Connected Apps](https://gemini.google.com/customize/connectors?hl=en), add a custom app, paste the URL and name it ArgonDesk. Follow the current site prompts. Refresh afterward and inspect the app's six tools.
+Copy the private MCP URL from ArgonDesk. Open [Gemini Connected Apps](https://gemini.google.com/customize/connectors?hl=en), add a custom app, paste the URL and name it ArgonDesk. Follow the current site prompts. Refresh afterward and inspect the app's eleven tools. See [agent tools](AGENT_TOOLS.md) for optional command/file-management grants.
 
 Treat the complete URL as a password. Do not post it in an issue or paste it into unrelated AI chats. The local panel is not the URL to register; localhost cannot be reached directly by Google's servers.
+
+The custom-app route requires manual confirmation for each write. To configure no per-write prompt, use the registered Connected Apps Platform route described in the [registration guide](CONNECTED_APPS_PLATFORM.md).
+
+For the registered route, copy the separate **Registered-app MCP endpoint** from ArgonDesk's OAuth card, generate OAuth credentials there, and choose **Yes → Machine-to-machine OAuth Client Credentials** in Connected Console. Do not use the legacy private URL as the registered endpoint.
 
 ## 5. Select the folder
 
@@ -44,7 +48,7 @@ Choose an existing task folder, set Read only or Read and edit, then enable acce
 
 The verified website path was English UI → Task → Argon. It is a tested path, not a permanent model requirement. Type @ and select the registered app from the menu.
 
-Ask Gemini to inspect the workspace, create a small uniquely named text file, and read it back. Review the proposed write and click Allow. Verify the actual file and a successful tool entry in Activity.
+Ask Gemini to inspect the workspace, create a small uniquely named text file, and read it back. A manually added custom app shows Allow for writes; a registered Connected App follows the per-tool confirmation settings configured in Connected Console. Verify the actual file and a successful tool entry in Activity.
 
 Tunnel online, MCP handshake and tools/list alone do not prove model file access. A printed function-call code block is not an executed tool request. If the task cannot call tools, preserve the evidence and use a fresh native-app task rather than the old Insert workflow.
 

@@ -16,7 +16,7 @@ That is text, not proof of execution. Native calls should produce real tool card
 
 ## It keeps asking Allow
 
-This is Google's manual write confirmation. Approving one action is not permission for all future writes. Ask the model to batch related replacements in one file using edit_file's edits array. ArgonDesk does not auto-click or suppress confirmation.
+For a manually added custom MCP app, Gemini requires manual confirmation for every write. To remove per-write prompts, use the registered Connected Apps Platform route and clear User confirmation required for write_file, edit_file and create_directory in Connected Console. See the [registration guide](CONNECTED_APPS_PLATFORM.md). ArgonDesk does not auto-click or disguise write tools as read-only.
 
 ## Tunnel connecting / online but files do not change
 

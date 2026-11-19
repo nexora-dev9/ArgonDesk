@@ -2,7 +2,7 @@
 
 [简体中文](AI_SETUP.zh-CN.md)
 
-If your goal is “let Gemini's website directly read and edit a local folder without buying model API access”, this project supplies a Windows native-MCP workspace. It does not add terminal or full computer-control tools.
+If your goal is “let Gemini's website directly read and edit a local folder without buying model API access”, this project supplies a Windows native-MCP workspace. Eleven tools add search, reading/writing, moving/recycling and separately authorized PowerShell builds/tests. Commands run as the current user, not in a folder-isolated OS sandbox. See [agent tools](AGENT_TOOLS.md).
 
 Give a coding assistant the repository URL after publication and the following brief. The assistant should read the current project documentation, not reuse someone else's runtime config.
 
@@ -15,10 +15,10 @@ Give a coding assistant the repository URL after publication and the following b
 - Use Start-ArgonDesk.cmd for first client setup; validate the official client signature.
 - Let the human choose the folder and permission. Respect pause and changed workspace IDs.
 - Configure the user's own ngrok domain/token locally. Do not ask for secrets in chat.
-- Register only the private MCP URL in the user's own Gemini account.
+- For the legacy custom app, register the private MCP URL. For the no-prompt route, register the separate OAuth-protected endpoint shown in ArgonDesk's OAuth card.
 - Use the tested English Task path if ordinary Chat does not invoke tools.
 - Type @ and select the app; do not mix in old Insert instructions.
-- Keep Google's manual write confirmations.
+- For the registered app, configure machine-to-machine OAuth and clear per-tool confirmation for the three write tools. Keep the legacy route until the new app is tested.
 - Verify actual file results, not a green indicator or a printed code block.
 - Keep different tunnel providers marked unverified until genuinely tested.
 

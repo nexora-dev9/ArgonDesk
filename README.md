@@ -1,12 +1,12 @@
 # ArgonDesk — let Gemini Web work in a local folder
 
-[简体中文](README.zh-CN.md) · English · Preview 0.4.2 · [MIT](LICENSE)
+[简体中文](README.zh-CN.md) · English · Preview 0.4.6 · [MIT](LICENSE)
 
 [Download Windows / source packages](https://github.com/nexora-dev9/ArgonDesk/releases) · [Usage, thinking and animation](docs/USAGE.md)
 
-Choose a folder on Windows, connect ArgonDesk as a custom MCP app in the **Gemini website**, and ask Gemini to read, create or edit files there. Use your existing eligible Gemini web account; no Gemini model API key or separate model API billing is required.
+Choose a folder on Windows, connect ArgonDesk to the **Gemini website** as either a custom MCP app or a registered Connected App, and ask Gemini to read, create or edit files there. The registered Connected App route can disable per-write confirmation in Google Connected Console. Use your existing eligible Gemini web account; no Gemini model API key or separate model API billing is required.
 
-This is for people searching for **Gemini web local file access**, **Gemini website MCP filesystem**, or **a local workspace for browser-based Gemini coding**. It brings the file editing part of an agent workspace to your web conversation. It currently exposes six text-file tools; it does not run terminal commands or replace a full IDE such as Antigravity.
+This is for people searching for **Gemini web local file access**, **Gemini website MCP filesystem**, or **a local workspace for browser-based Gemini coding**. Eleven tools cover search, document/image reading, text editing, moving and recycling files, plus separately authorized PowerShell builds, tests and packaging. Commands run with the current Windows user's permissions; they are not restricted to the selected folder by an OS sandbox.
 
 ArgonDesk is an independent Windows preview, not an official Google product. ArgonDesk is the project name. Its tool server is not tied to a particular model codename.
 
@@ -16,6 +16,7 @@ ArgonDesk is an independent Windows preview, not an official Google product. Arg
 | Guide | What it covers |
 | --- | --- |
 | [First installation](docs/SETUP.md) | Download or source build, account prerequisites, first native tool call |
+| [Registered Connected App](docs/CONNECTED_APPS_PLATFORM.md) | Google Connected Console registration, domain verification and per-tool confirmation settings |
 | [Network and tunnel choices](docs/NETWORKING.md) | ngrok, TUN, Cloudflare and other options, current support boundaries |
 | [Troubleshooting](docs/TROUBLESHOOTING.md) | Allow, app selection, black code blocks, connecting, quotas and scope errors |
 | [Usage and creative quality](docs/USAGE.md) | Fewer unnecessary calls, animated SVGs, thinking settings and two usage limits |
@@ -28,7 +29,7 @@ ArgonDesk is an independent Windows preview, not an official Google product. Arg
 
 ## How it works
 
-Gemini website → Google's native custom MCP app → your private HTTPS endpoint → ngrok → ArgonDesk on localhost → your selected folder.
+Gemini website → custom MCP app or registered Connected App → your private HTTPS endpoint → ngrok → ArgonDesk on localhost → your selected folder.
 
 The control panel stays at http://127.0.0.1:3008/ and is not forwarded publicly. This loopback address means the reader's own PC, running its own copy of ArgonDesk; 3008 is the default port. No browser extension, long Insert prompt or green automation overlay is needed. The web page handles native tool requests and results; ArgonDesk does not automatically type extra prompts into your conversation.
 
@@ -46,10 +47,10 @@ The current target is Windows 10/11 x64 with Microsoft Edge, Windows PowerShell 
 **Windows package:** fully extract the Windows x64 ZIP into a writable folder, then open `Start-ArgonDesk.cmd`. On first launch it downloads the official ngrok client and verifies its signature before opening the app. After setup, you can use `ArgonDesk.exe` or a shortcut. Keep the folder contents together. The package includes Node.js and runtime dependencies; it does not redistribute ngrok. The desktop entry is currently unsigned.
 
 **Source package:**
-1. Install [Node.js](https://nodejs.org/) 22 or newer.
+1. Install [Node.js](https://nodejs.org/) 22.13 or newer; 24 LTS is recommended.
 2. Open PowerShell in the extracted source folder.
 3. Run `.\Setup.ps1` to install locked npm dependencies and download the official ngrok client. Its Authenticode signature is checked.
-4. Run `.\Build.ps1` to compile `ArgonDesk.exe`.
+4. Run `.\Build.ps1` to compile `ArgonDesk.exe` and `ArgonDesk.WorkspaceHost.exe`.
 5. Open `Start-ArgonDesk.cmd`. The Chinese alias `打开Gemini工作台.cmd` does the same. Without a C# build, it starts the PowerShell entry.
 
 If PowerShell blocks scripts, review the script and follow your Windows administrator's execution policy. No system service or automatic startup task is installed. First launch creates an empty internal workspace in read-only, paused mode.
@@ -62,12 +63,12 @@ You need access to Google's **custom Connected Apps** feature. Google's current 
 2. In **Connection**, enter the domain and token, save, then start the tunnel. An empty token field preserves an already saved token.
 3. Once the tunnel is online, copy the **private connection URL** from ArgonDesk.
 4. Open [Gemini Connected Apps](https://gemini.google.com/customize/connectors?hl=en). Add a custom app using that URL and give it a name such as **ArgonDesk**. Follow Google's current setup screens.
-5. Refresh Gemini. Its app details should expose exactly six tools.
+5. Refresh Gemini. Its app details should expose eleven tools. If a previously connected app caches six, reopen its details or start a fresh task and check again.
 6. In ArgonDesk, choose the folder, select **Read only** or **Read and edit**, then enable file access.
 
-Optionally enable **Connect when ArgonDesk opens** to restore the tunnel. Separately, **Preferences → Enable file access on startup** opts into enabling the saved folder and permission on every backend start. It is off for new and existing installations until chosen. Turning it on does not enable the current session; a manual pause lasts until restart when this option is on. Missing or replaced roots stay paused.
+Preferences offers independent tunnel/file autostart and command/file-management grants. Opening ArgonDesk restores opted-in startup settings. Turning on file autostart does not immediately unpause the current session; use Enable file access or reopen from the desktop/tray. Missing or replaced roots stay paused. See [agent tools and permission details](docs/AGENT_TOOLS.md).
 
-The URL contains a random capability key. Treat the complete URL as a password. This preview does not implement Google-account-bound OAuth. Token storage uses DPAPI for the current Windows user; do not migrate its ciphertext to another computer.
+The legacy custom-app URL contains a random capability key; treat it as a password. The registered-app endpoint uses machine-to-machine OAuth, and its client secret is DPAPI-encrypted for the current Windows user. Keep the legacy connection until the registered app is tested, then enable Require OAuth to block legacy public calls.
 
 ## Daily workflow and Allow confirmations
 
@@ -79,7 +80,9 @@ The previously verified website workflow was **English interface → Task → Ar
 4. Review Google's **Allow / Deny** card when a write is proposed. Click **Allow** to approve it.
 5. Check **Activity** and the actual file result.
 
-**Google currently requires manual confirmation for write actions. ArgonDesk does not remove or auto-click those confirmations.** A complex task may ask more than once. Batch edits can reduce the number of tool calls when the model uses them, but do not remove Google's confirmation requirement.
+**A manually added custom MCP app requires manual confirmation for writes.** A registered Connected App can configure confirmation per tool in Google Connected Console. See the [registration guide](docs/CONNECTED_APPS_PLATFORM.zh-CN.md). ArgonDesk does not auto-click Allow or disguise write tools as read-only.
+
+For the no-per-write-confirmation route, use the **Registered-app MCP endpoint** in ArgonDesk's OAuth section, choose machine-to-machine OAuth in Connected Console, and clear User confirmation required for write_file, edit_file and create_directory. Test the registered app first; only then enable Require OAuth on the public MCP endpoint.
 
 Switching folders or changing read/edit permission pauses access and rotates the workspace ID. Old requests using the previous ID fail. Restarting also rotates the ID and stays paused unless startup file access is enabled. The private connection URL stays the same across these changes, so you do not need to register the app again.
 
@@ -92,19 +95,26 @@ Closing the panel leaves the backend in the Windows tray. Use the power button o
 | Tool | Behavior |
 | --- | --- |
 | workspace_info | Get the selected folder, current workspace ID, permission and pause state |
-| list_files | List up to 500 entries in a directory |
-| read_file | Read 1–1000 lines per request, default 200 |
+| list_files | Paginate directories; follow next_offset after the default 500 entries |
+| read_file | Read text, documents, images and arrays with bounded results and continuation cursors |
 | write_file | Create without overwrite (`mode=create`), rewrite or append UTF-8 text; creates missing parent folders |
 | edit_file | Apply a unique replacement, or up to 50 replacements to one file |
 | create_directory | Create a folder within the workspace |
+| find_files | Glob/filename search; defaults to 200 results and skips dependency/build folders |
+| search_text | Literal or regex text search with relative paths, line numbers and matched text |
+| move_path | Scoped moves/renames with parent creation; requires file-management permission |
+| delete_path | Recycle by default, refusing permanent fallback; requires file-management permission |
+| run_command | PowerShell from a checked cwd; separate grant, 120-second default and about 32 KiB output |
 
-Files are limited to 2 MiB. This preview targets ordinary UTF-8 text, not arbitrary binary files. There are no shell, browser-control, delete, move or permission-management tools.
+Large text reads no longer have a 2 MiB file limit. Responses contain up to 64,000 characters and a continuation cursor. DOCX/PDF/XLSX/PPTX/OpenDocument/RTF/EPUB text, image and PDF-page previews, and common NPY/NPZ arrays are supported. Container/image parsing is bounded to 256 MiB input and 512 MiB ZIP expansion. Other/larger binary files support bounded raw-byte reads, which do not interpret their semantics. Text writes and edits remain limited to 2 MiB. See [reading details](docs/READING.md) and [search, organization and build tools](docs/AGENT_TOOLS.md). edit_file matches LF/CRLF consistently while retaining the file's original newline style.
 
 The server enforces the selected root, workspace ID, paused state and read/edit permission. It rejects absolute paths, parent traversal, NTFS alternate streams, device names, trailing aliases, symbolic links, junctions and hard links. Replacing the selected root with a junction is also rejected.
 
-This is a file-tool boundary, not a change to Windows account permissions or a complete operating-system sandbox. Programs you manually execute retain their own Windows permissions. The implementation is not a guarantee against concurrent filesystem tampering by other local processes.
+Use **gear → Preferences** to enable startup file access, automatic tunnel connection, file management and commands independently. Reopening the panel from the desktop/tray restores opted-in startup settings, even when the backend is already running. Clean installations do not enable these extra permissions for you. Folder/access changes still pause access.
 
-Requested file contents travel through ngrok to Google. The random URL must remain private. Local history stores tool names, workspace paths, timestamps and success/failure, not file contents. Older records may lack a workspace path. Tunnel diagnostics store a short list of event categories and error codes, without raw agent logs or tokens.
+The file-tool boundary does not change Windows account permissions. run_command checks the workspace ID, edit permission, independent grant and relative cwd, but arbitrary PowerShell can access other folders, networks and programs as the current user. It does not elevate privileges or provide an OS sandbox. Pausing, changing folder or revoking command permission terminates active commands and descendants. File tools do not guarantee protection against concurrent filesystem tampering by other local processes.
+
+Requested file contents and command output travel through ngrok to Google. Keep the private URL secret. Local history stores tools, paths/commands, search queries, status, duration and exit codes, but not file bodies or command output. Avoid putting credentials directly in commands, because those commands enter local history. Older records may lack the new fields. Tunnel diagnostics omit raw agent logs and tokens.
 
 ## Fewer requests
 

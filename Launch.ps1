@@ -38,6 +38,14 @@ if (!$ready) {
     if (!$ready) { $process.Refresh(); if (!$process.HasExited) { Stop-Process -Id $process.Id }; throw ('工作台未就绪。请查看 ' + (Join-Path $stateRoot 'server.stderr.log')) }
     @{ pid = $process.Id; ticks = $process.StartTime.ToUniversalTime().Ticks.ToString(); address = $address } | ConvertTo-Json | Set-Content -LiteralPath $runningPath -Encoding utf8
 }
+try {
+    $client = [Net.WebClient]::new(); $client.Proxy = $null; $client.Encoding = [Text.Encoding]::UTF8
+    $startupState = $client.DownloadString("$address/api/state") | ConvertFrom-Json
+    $client.Headers['Content-Type'] = 'application/json'
+    $client.Headers['X-Workspace-Csrf'] = $startupState.csrf
+    $client.UploadString("$address/api/startup/restore", 'POST', '{}') | Out-Null
+} catch { Write-Warning '自动恢复未完成，可在工作台中检查所选文件夹和连接设置。' }
+finally { if ($client) { $client.Dispose() } }
 if (!$NoWindow) {
     $edge = 'C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe'
     if (!(Test-Path -LiteralPath $edge)) { $edge = 'C:\Program Files\Microsoft\Edge\Application\msedge.exe' }

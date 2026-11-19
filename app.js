@@ -72,13 +72,32 @@ function renderHistory(target, items, preview = false) {
     const row = document.createElement('div'); row.className = 'event' + (item.ok ? '' : ' failed');
     const symbol = document.createElement('div'); symbol.className = 'event-symbol'; symbol.append(icon(item.ok ? '#i-check' : '#i-info'));
     const content = document.createElement('div'), title = document.createElement('div'), path = document.createElement('div');
-    title.className = 'event-title'; title.textContent = text('tool_' + item.name) + (item.edits > 1 ? ' · ' + text('changes', { count: item.edits }) : '');
+    const toolTitle = text('tool_' + item.name);
+    title.className = 'event-title'; title.textContent = (toolTitle.startsWith('tool_') ? item.name : toolTitle) + (item.edits > 1 ? ' · ' + text('changes', { count: item.edits }) : '');
     path.className = 'event-path';
-    path.textContent = preview ? item.path || text('currentFolder') : item.workspace ? item.workspace.replace(/[\\/]$/, '') + (item.path ? '\\' + item.path : '') : item.path || text('currentFolder');
+    const relative = item.path === '.' ? '' : item.path;
+    path.textContent = preview ? relative || text('currentFolder') : item.workspace ? item.workspace.replace(/[\\/]$/, '') + (relative ? '\\' + relative : '') : relative || text('currentFolder');
+    if (item.dst) path.textContent += ' → ' + item.dst;
     content.append(title, path);
+    if (item.command || item.pattern || item.query) {
+      const detail = document.createElement('div'); detail.className = 'event-detail';
+      detail.textContent = item.command || item.pattern || item.query; content.append(detail);
+    }
+    if (item.error && !preview) {
+      const error = document.createElement('div'); error.className = 'event-error'; error.textContent = item.error; content.append(error);
+    }
+    const meta = document.createElement('div'); meta.className = 'event-meta';
+    if (Number.isFinite(item.duration_ms)) {
+      const duration = document.createElement('span');
+      duration.textContent = item.duration_ms < 1000 ? item.duration_ms + ' ms' : (item.duration_ms / 1000).toFixed(1) + ' s'; meta.append(duration);
+    }
+    if (Number.isInteger(item.exit_code)) {
+      const exit = document.createElement('span'); exit.textContent = text('exitCode', { code: item.exit_code }); meta.append(exit);
+    }
+    if (meta.childNodes.length) content.append(meta);
     const clock = document.createElement('time'); clock.dateTime = item.time; clock.title = new Date(item.time).toLocaleString(language === 'en' ? 'en-GB' : 'zh-CN', { hour12: false }); clock.textContent = time(item.time);
     row.append(symbol, content);
-    if (!item.ok) { const label = document.createElement('span'); label.className = 'event-failed'; label.textContent = text('denied'); row.append(label); }
+    const label = document.createElement('span'); label.className = item.ok ? 'event-status' : 'event-failed'; label.textContent = text(item.ok ? 'succeeded' : item.status || 'denied'); row.append(label);
     row.append(clock); box.append(row);
   }
 }
@@ -93,6 +112,9 @@ function render() {
   element('root').textContent = state.workspace; element('root').title = state.workspace; element('access').value = state.access;
   element('status-text').textContent = text(state.enabled ? 'enabled' : 'paused');
   element('file-auto-start').checked = state.fileAutoStart === true;
+  element('tunnel-auto-start').checked = state.tunnel.autoStart === true;
+  element('allow-file-management').checked = state.allow_file_management === true;
+  element('allow-commands').checked = state.allow_commands === true;
   element('enabled-description').textContent = text(state.enabled ? 'enabledHelp' : 'pausedHelp');
   element('access-state').classList.toggle('enabled', state.enabled);
   element('toggle').lastElementChild.textContent = text(state.enabled ? 'pause' : 'enable');
@@ -116,6 +138,18 @@ function render() {
   element('credential-badge').classList.toggle('online', state.tunnel.configured);
   element('token-status').textContent = text(state.tunnel.configured ? 'savedToken' : 'unsavedToken');
   element('public-url').textContent = state.publicMcp || text('notConfiguredHelp');
+  element('connected-app-verification-url').textContent = state.publicBase ? state.publicBase + '/.well-known/google-connected-apps' : text('verificationDomainMissing');
+  element('connected-app-badge').textContent = text(state.connectedAppVerificationConfigured ? 'verificationConfigured' : 'verificationMissing');
+  element('connected-app-badge').classList.toggle('online', state.connectedAppVerificationConfigured);
+  element('connected-app-verification-status').textContent = text(state.connectedAppVerificationConfigured ? 'verificationStored' : 'verificationNotStored');
+  element('oauth-badge').textContent = text(state.oauthCredentialsConfigured ? 'oauthConfigured' : 'oauthMissing');
+  element('oauth-badge').classList.toggle('online', state.oauthCredentialsConfigured);
+  element('oauth-client-id-value').textContent = state.oauthClientId || text('oauthNotConfigured');
+  element('oauth-token-endpoint-value').textContent = state.oauthTokenEndpoint || text('verificationDomainMissing');
+  element('registered-mcp-value').textContent = state.registeredMcp || text('verificationDomainMissing');
+  element('oauth-status').textContent = text(state.oauthCredentialsConfigured ? 'oauthStored' : 'oauthNotStored');
+  element('oauth-required').checked = state.oauthRequired === true;
+  element('oauth-required').disabled = !state.oauthCredentialsConfigured;
   element('request-count').textContent = state.traffic.requests.toLocaleString(language);
   element('response-size').textContent = state.traffic.responseBytes >= 1048576 ? (state.traffic.responseBytes / 1048576).toFixed(2) + ' MB' : (state.traffic.responseBytes / 1024).toFixed(1) + ' KB';
   element('last-request').textContent = state.traffic.lastRequestAt ? time(state.traffic.lastRequestAt) : text('none');
@@ -160,9 +194,12 @@ element('preferences-close').onclick = () => element('preferences-dialog').close
 element('language').addEventListener('change', event => perform('language', async () => {
   await api('preferences', { language: event.target.value });
 }));
-element('file-auto-start').addEventListener('change', event => perform('file-auto-start', async () => {
-  await api('preferences', { fileAutoStart: event.target.checked });
-}));
+for (const [id, key] of [['file-auto-start', 'fileAutoStart'], ['tunnel-auto-start', 'tunnelAutoStart'], ['allow-file-management', 'allowFileManagement'], ['allow-commands', 'allowCommands']]) {
+  element(id).addEventListener('change', event => perform(id, async () => {
+    await api('preferences', { [key]: event.target.checked });
+    if (key === 'tunnelAutoStart') element('auto-start').checked = event.target.checked;
+  }));
+}
 document.querySelectorAll('[data-filter]').forEach(node => node.addEventListener('click', () => {
   activityFilter = node.dataset.filter;
   document.querySelectorAll('[data-filter]').forEach(button => button.classList.toggle('active', button === node)); render();
@@ -176,6 +213,47 @@ element('connection-form').addEventListener('submit', event => {
   event.preventDefault();
   perform('tunnel-save', async () => { await api('tunnel/configure', { domain: element('domain').value, token: element('authtoken').value, autoStart: element('auto-start').checked }); element('authtoken').value = ''; formLoaded = false; message(text('settingsSaved')); });
 });
+element('connected-app-form').addEventListener('submit', event => {
+  event.preventDefault();
+  perform('connected-app-save', async () => {
+    await api('connected-apps/verification', { verification: element('connected-app-verification').value });
+    element('connected-app-verification').value = '';
+    message(text('verificationSaved'));
+  });
+});
+element('copy-verification-url').onclick = () => perform('copy-verification-url', async () => {
+  if (!state.publicBase) return message(text('verificationDomainMissing'));
+  await navigator.clipboard.writeText(state.publicBase + '/.well-known/google-connected-apps');
+  message(text('verificationUrlCopied'));
+});
+element('oauth-generate').onclick = () => perform('oauth-generate', async () => {
+  if (state.oauthCredentialsConfigured && !await confirmAction(text('oauthRotateTitle'), text('oauthRotateDescription'), text('oauthGenerate'))) return;
+  const result = await api('oauth/credentials', {});
+  element('oauth-new-client-id').textContent = result.clientId;
+  element('oauth-new-client-secret').textContent = result.clientSecret;
+  element('oauth-new-token-endpoint').textContent = result.tokenEndpoint;
+  element('oauth-result').hidden = false;
+  message(text('oauthGenerated'));
+});
+element('copy-registered-mcp').onclick = () => perform('copy-registered-mcp', async () => {
+  if (state.registeredMcp) { await navigator.clipboard.writeText(state.registeredMcp); message(text('registeredMcpCopied')); }
+});
+element('oauth-required').addEventListener('change', event => perform('oauth-required', async () => {
+  const required = event.target.checked;
+  if (required && !await confirmAction(text('oauthRequireTitle'), text('oauthRequireDescription'), text('oauthRequire'))) return;
+  await api('oauth/require', { required });
+  message(text(required ? 'oauthRequiredOn' : 'oauthRequiredOff'));
+}));
+for (const [buttonId, valueId, messageKey] of [
+  ['copy-oauth-client-id', 'oauth-new-client-id', 'clientIdCopied'],
+  ['copy-oauth-client-secret', 'oauth-new-client-secret', 'clientSecretCopied'],
+  ['copy-oauth-token-endpoint', 'oauth-new-token-endpoint', 'tokenEndpointCopied']
+]) {
+  element(buttonId).onclick = () => perform(buttonId, async () => {
+    const value = element(valueId).textContent;
+    if (value) { await navigator.clipboard.writeText(value); message(text(messageKey)); }
+  });
+}
 element('tunnel-toggle').onclick = () => perform('tunnel-toggle', async () => {
   if (state.tunnel.status === 'stopped') await api('tunnel/start', {});
   else { await api('tunnel/stop', {}); formLoaded = false; message(text('disconnected')); }
@@ -188,7 +266,7 @@ function renderDiagnostics() {
   if (!diagnostics) return;
   const box = element('diagnostic-result'); box.replaceChildren();
   const title = document.createElement('h3'); title.textContent = text('diagnosticTitle'); box.append(title);
-  const english = ['Local file service', 'File tools', 'Workspace access', 'ngrok client', 'Account token', 'HTTPS tunnel'];
+  const english = ['Local MCP service', 'Workspace tools', 'Workspace access', 'ngrok client', 'Account token', 'HTTPS tunnel'];
   for (const [index, item] of diagnostics.checks.entries()) {
     const row = document.createElement('div'), mark = document.createElement('span'), detail = document.createElement('span');
     row.className = 'diagnostic-check'; mark.textContent = item.ok ? '✓' : '○';

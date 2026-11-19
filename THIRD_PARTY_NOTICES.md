@@ -9,6 +9,12 @@ ArgonDesk's own code is licensed under MIT; see LICENSE. Its panel, folder guard
 | MCP TypeScript SDK | 1.32.1 | MIT | https://github.com/modelcontextprotocol/typescript-sdk |
 | Express | 4.22.3 | MIT | https://github.com/expressjs/express |
 | Zod | 3.25.76 | MIT | https://github.com/colinhacks/zod |
+| officeparser | 8.2.0 | MIT | https://github.com/harshankur/officeParser |
+| PDF.js | 6.2.108 | Apache-2.0 | https://github.com/mozilla/pdf.js |
+| @napi-rs/canvas | 1.1.0 | MIT | https://github.com/Brooooooklyn/canvas |
+| sharp | 0.35.5 | Apache-2.0 | https://github.com/lovell/sharp |
+| yauzl | 3.4.0 | MIT | https://github.com/thejoshwolfe/yauzl |
+| fflate (test fixtures and transitive dependency) | 0.8.3 | MIT | https://github.com/101arrowz/fflate |
 
 The Windows package includes Node.js 24.18.0 and runtime npm dependencies. Node's license and component notices are retained in licenses/Node.js.txt; source: https://raw.githubusercontent.com/nodejs/node/v24.18.0/LICENSE . Dependencies retain their own license files.
 
