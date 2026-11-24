@@ -4,15 +4,15 @@
 
 ## 当前预览版
 
-已实现 11 项工具、只读/编辑、独立命令/整理授权、暂停与编号更新、文件路径/链接限制、原生 MCP JSON、ngrok 进程管理、打开时恢复、双语界面/托盘，以及带耗时/退出码的记录和兼容 CRLF/LF 的批量编辑。命令以当前用户执行，不是文件系统沙箱。[详细参数](AGENT_TOOLS.zh-CN.md)。
+WebAgy 1.0 提供 12 项工具、本地 Skills、快照、目录独立只读、ngrok 和 Cloudflare Tunnel。界面默认英文并记住用户选的语言。详见[工具参数](AGENT_TOOLS.zh-CN.md)与[更新记录](../CHANGELOG.md)。
 
-0.4.2 增加可选的启动自动启用、不覆盖的新建与父目录创建、精简模型指导及单份结果。隔离测试覆盖 27 项文件/MCP 检查和 7 种启动场景。响应体积测试不发 Gemini 消息，不能据此证明额度或创作质量改善。详见[用量说明](USAGE.zh-CN.md)及[真实 GitHub CI](https://github.com/nexora-dev9/ArgonDesk/actions)。
+0.4.2 增加可选的启动自动启用、不覆盖的新建与父目录创建、精简模型指导及单份结果。隔离测试覆盖 27 项文件/MCP 检查和 7 种启动场景。响应体积测试不发 Gemini 消息，不能据此证明额度或创作质量改善。详见[用量说明](USAGE.zh-CN.md)及[真实 GitHub CI](https://github.com/nexora-dev9/WebAgy/actions)。
 
 本机证据包括真实 MCP 隔离样例、公网 ping 和工具发现、此前从 Gemini 官网批准写入并读回，以及使用者确认文件夹弹窗正常。安装包、安装器与界面检查，不等于已在 GitHub CI 或另一台电脑验证。
 
 ## 当前限制
 
-仅 Windows x64。没有完整电脑控制、直接二进制编辑、多工作区并发、Google 用户账户绑定 OAuth 或任意命令的系统级隔离。普通自定义应用仍需人工确认；注册式 Connected App 可配置逐工具确认。集成提供方仅 ngrok。不承诺长期稳定性或所有账号/模型兼容。桌面入口未签名。
+目前面向 Windows x64。写入确认取决于 Gemini 应用配置。Cloudflare 已有本地模拟测试，实际连接还取决于自己的网络与域名。桌面入口未签名。
 
 ## 后续方向
 

@@ -1,14 +1,14 @@
 import { translate } from './i18n.js';
 let state, diagnostics, currentPage = 'workspace', activityFilter = 'all', formLoaded = false, stopped = false, refreshing = false, toastTimer;
-let language = localStorage.getItem('argondesk.language') === 'en' ? 'en' : 'zh-CN';
+let language = localStorage.getItem('webagy.language') === 'zh-CN' ? 'zh-CN' : 'en';
 const busy = new Set();
 const element = id => document.getElementById(id);
 const text = (key, variables) => translate(key, language, variables);
 const time = value => new Date(value).toLocaleTimeString(language === 'en' ? 'en-GB' : 'zh-CN', { hour12: false });
 function applyLanguage() {
   document.documentElement.lang = language;
-  document.title = language === 'en' ? 'ArgonDesk — Gemini Workspace' : 'ArgonDesk — Gemini 工作台';
-  localStorage.setItem('argondesk.language', language);
+  document.title = language === 'en' ? 'WebAgy — Local Workspace for Gemini' : 'WebAgy — Gemini 本地工作台';
+  localStorage.setItem('webagy.language', language);
   document.querySelectorAll('[data-i18n]').forEach(node => { node.textContent = text(node.dataset.i18n); });
   document.querySelectorAll('[data-i18n-aria]').forEach(node => node.setAttribute('aria-label', text(node.dataset.i18nAria)));
   document.querySelectorAll('[data-i18n-placeholder]').forEach(node => { node.placeholder = text(node.dataset.i18nPlaceholder); });
@@ -20,15 +20,21 @@ function errorText(value) {
   if (language !== 'en' || !/[\u3400-\u9fff]/.test(value || '')) return value || text('genericError');
   if (/ERR_NGROK_90(?:09|10)/.test(value)) return 'This ngrok account does not support an explicit client proxy. Use a reachable route or process routing.';
   if (/ngrok.*(?:域名|HTTPS)|请输入.*域名/.test(value)) return 'Enter the HTTPS development domain assigned by ngrok, without a path or secret.';
-  if (/连接超时/.test(value)) return 'ngrok connection timed out. Check the network and account settings.';
+  if (/连接超时/.test(value)) return 'The tunnel connection timed out. Check the network and connection settings.';
   if (/证书撤销列表/.test(value)) return 'The network could not retrieve the ngrok certificate revocation list. Check DNS and connectivity.';
   if (/ngrok.*未能建立连接/.test(value)) return 'ngrok could not connect. Check the account, domain and network.' + (value.match(/ERR_NGROK_\d+/)?.[0] || '');
   if (/请先断开/.test(value)) return 'Disconnect before changing connection settings.';
   if (/正在连接/.test(value)) return 'A connection is already in progress.';
+  if (/cloudflared.*安装|安装.*cloudflared/.test(value)) return 'Install cloudflared first.';
   if (/安装.*ngrok|尚未安装/.test(value)) return 'Install the ngrok client first.';
   if (/Authtoken.*格式/.test(value)) return 'Enter the complete ngrok Authtoken.';
   if (/保存.*Authtoken/.test(value)) return 'Save your ngrok Authtoken first.';
   if (/密钥/.test(value)) return 'Windows could not read or save the encrypted account token.';
+  if (/只读/.test(value)) return 'This action needs write access. Check the selected folder and its read-only settings.';
+  if (/工作区已暂停/.test(value)) return 'File access is paused. Enable it in the workspace first.';
+  if (/工作区已切换|权限已变化/.test(value)) return 'The workspace or its permissions changed. Start the operation again.';
+  if (/不在已授权|超出工作区/.test(value)) return 'The path is outside the authorized folders.';
+  if (/未找到对应的文件快照/.test(value)) return 'This snapshot is no longer available.';
   return text('genericError');
 }
 function message(value) {
@@ -68,6 +74,7 @@ function renderHistory(target, items, preview = false) {
     title.textContent = text(activityFilter === 'failed' && !preview ? 'noFailures' : 'noActivity');
     detail.textContent = text('noActivityHelp'); content.append(title, detail); empty.append(content); box.append(empty); return;
   }
+  const availableSnapshots = new Set(state?.snapshotIds || []);
   for (const item of items) {
     const row = document.createElement('div'); row.className = 'event' + (item.ok ? '' : ' failed');
     const symbol = document.createElement('div'); symbol.className = 'event-symbol'; symbol.append(icon(item.ok ? '#i-check' : '#i-info'));
@@ -84,7 +91,7 @@ function renderHistory(target, items, preview = false) {
       detail.textContent = item.command || item.pattern || item.query; content.append(detail);
     }
     if (item.error && !preview) {
-      const error = document.createElement('div'); error.className = 'event-error'; error.textContent = item.error; content.append(error);
+      const error = document.createElement('div'); error.className = 'event-error'; error.textContent = errorText(item.error); content.append(error);
     }
     const meta = document.createElement('div'); meta.className = 'event-meta';
     if (Number.isFinite(item.duration_ms)) {
@@ -97,24 +104,135 @@ function renderHistory(target, items, preview = false) {
     if (meta.childNodes.length) content.append(meta);
     const clock = document.createElement('time'); clock.dateTime = item.time; clock.title = new Date(item.time).toLocaleString(language === 'en' ? 'en-GB' : 'zh-CN', { hour12: false }); clock.textContent = time(item.time);
     row.append(symbol, content);
+    if (!preview && item.snapshot_id && availableSnapshots.has(item.snapshot_id)) {
+      const restore = document.createElement('button');
+      restore.className = 'restore-button';
+      restore.textContent = text('restoreVersion');
+      restore.onclick = async () => {
+        if (!await confirmAction(text('restoreTitle'), text('restoreDescription', { path: relative || text('currentFolder') }), text('restoreConfirm'))) return;
+        try {
+          restore.disabled = true;
+          await api('snapshots/' + encodeURIComponent(item.snapshot_id) + '/restore', {});
+          message(text('restoredToast'));
+          await refresh().catch(() => {});
+        } catch (error) {
+          message(errorText(error.message));
+          restore.disabled = false;
+        }
+      };
+      row.append(restore);
+    }
     const label = document.createElement('span'); label.className = item.ok ? 'event-status' : 'event-failed'; label.textContent = text(item.ok ? 'succeeded' : item.status || 'denied'); row.append(label);
     row.append(clock); box.append(row);
   }
 }
+function syncProviderForm() {
+  const provider = element('tunnel-provider').value;
+  const cfMode = element('cloudflare-mode').value;
+  const isCf = provider === 'cloudflared';
+  const isQuick = isCf && cfMode === 'quick';
+  element('cloudflare-mode-group').hidden = !isCf;
+  element('cloudflare-mode-hint').textContent = text(isQuick ? 'cloudflareQuickHint' : 'cloudflareTokenHint');
+  element('cloudflared-install-row').hidden = !isCf || !!state?.tunnel?.cloudflaredInstalled;
+  element('domain-field-group').hidden = isQuick;
+  element('token-field-group').hidden = isQuick;
+  element('domain-label').textContent = text(isCf ? 'cloudflareDomain' : 'domain');
+  element('domain').placeholder = text(isCf ? 'cloudflareDomainPlaceholder' : 'domainPlaceholder');
+  element('token-label').textContent = text(isCf ? 'cloudflareToken' : 'token');
+  element('authtoken').placeholder = text(isCf ? 'cloudflareTokenPlaceholder' : 'tokenPlaceholder');
+  element('token-help-link').hidden = isCf;
+  element('domains-help-link').hidden = isCf;
+  const hasToken = isCf ? !!state?.tunnel?.cloudflaredConfigured : !!state?.tunnel?.ngrokConfigured;
+  element('token-status').textContent = text(hasToken ? 'savedToken' : 'unsavedToken');
+}
 function render() {
   if (!state || stopped) return;
-  if (language !== state.language) { language = state.language === 'en' ? 'en' : 'zh-CN'; applyLanguage(); }
+  const savedLanguage = state.language === 'zh-CN' ? 'zh-CN' : 'en';
+  if (language !== savedLanguage) { language = savedLanguage; applyLanguage(); }
   document.querySelectorAll('button,select,input').forEach(node => { node.disabled = false; });
   const online = state.tunnel.status === 'online', connecting = state.tunnel.status === 'connecting';
   const statusKey = online ? 'online' : connecting ? 'connecting' : state.tunnel.error ? 'retryNeeded' : 'stopped';
   const folder = state.workspace.replace(/[\\/]$/, '').split(/[\\/]/).pop() || state.workspace;
   element('folder-name').textContent = folder; element('sidebar-folder').textContent = folder;
   element('root').textContent = state.workspace; element('root').title = state.workspace; element('access').value = state.access;
+  const roots = element('additional-roots'); roots.replaceChildren();
+  const readOnlySet = new Set(state.read_only_roots || []);
+  const unavailableSet = new Set(state.unavailable_roots || []);
+  const rootPermissions = new Map((state.root_permissions || []).map(item => [item.path, item.access]));
+  for (const folderPath of state.additional_roots || []) {
+    const row = document.createElement('div'); row.className = 'authorized-root';
+    const name = document.createElement('span'); name.className = 'path'; name.textContent = folderPath; name.title = folderPath;
+    const actions = document.createElement('div'); actions.className = 'root-actions';
+    if (unavailableSet.has(folderPath)) {
+      const offline = document.createElement('span');
+      offline.className = 'small-pill';
+      offline.textContent = text('rootOffline');
+      actions.append(offline);
+    } else {
+      const isLockedReadOnly = readOnlySet.has(folderPath);
+      const effectiveReadOnly = state.access !== 'edit' || isLockedReadOnly || rootPermissions.get(folderPath) === 'read';
+      const modeBtn = document.createElement('button');
+      modeBtn.className = 'root-mode-pill' + (effectiveReadOnly ? ' readonly' : '');
+      modeBtn.textContent = text(effectiveReadOnly ? 'rootReadOnly' : 'rootReadWrite');
+      modeBtn.disabled = state.access !== 'edit' || (effectiveReadOnly && !isLockedReadOnly);
+      modeBtn.onclick = () => perform('add-folder', async () => {
+        const nextReadOnly = isLockedReadOnly
+          ? (state.read_only_roots || []).filter(item => item !== folderPath)
+          : [...(state.read_only_roots || []), folderPath];
+        await api('settings', { readOnlyRoots: nextReadOnly });
+        message(text('rootPermissionChanged'));
+      });
+      actions.append(modeBtn);
+    }
+    const remove = document.createElement('button'); remove.className = 'text-button'; remove.textContent = text('removeFolder');
+    remove.onclick = () => perform('add-folder', async () => {
+      await api('settings', { roots: state.additional_roots.filter(item => item !== folderPath) });
+      message(text('folderChanged'));
+    });
+    actions.append(remove);
+    row.append(name, actions); roots.append(row);
+  }
+  const skills = state.skills || [];
+  element('skills-badge').textContent = state.enableSkills ? text('skillsCount', { count: skills.length }) : text('skillsOff');
+  element('skills-badge').classList.toggle('online', state.enableSkills && skills.length > 0);
+  element('skills-summary').textContent = state.enableSkills
+    ? text('skillsSummary', { skills: skills.length, rules: state.rulesCount || 0 })
+    : text('skillsSummaryOff');
+  const skillDirsBox = element('skill-dirs'); skillDirsBox.replaceChildren();
+  for (const dirPath of state.skillDirs || []) {
+    const row = document.createElement('div'); row.className = 'authorized-root';
+    const name = document.createElement('span'); name.className = 'path'; name.textContent = dirPath; name.title = dirPath;
+    const remove = document.createElement('button'); remove.className = 'text-button'; remove.textContent = text('removeSkillFolder');
+    remove.onclick = () => perform('add-skill-folder', async () => {
+      await api('skills/dirs', { dirs: (state.skillDirs || []).filter(item => item !== dirPath) });
+      message(text('skillFolderRemoved'));
+    });
+    row.append(name, remove); skillDirsBox.append(row);
+  }
+  const skillsList = element('skills-list'); skillsList.replaceChildren();
+  if (!skills.length) {
+    const empty = document.createElement('p'); empty.className = 'footnote'; empty.textContent = text('noSkillsFound');
+    skillsList.append(empty);
+  } else {
+    for (const item of skills) {
+      const chip = document.createElement('span');
+      chip.className = 'skill-chip' + (item.manual_only ? ' manual' : '');
+      chip.title = item.description;
+      const sourceKey = item.source === 'workspace' ? 'skillSourceWorkspace' : item.source === 'custom' ? 'skillSourceCustom' : 'skillSourceGlobal';
+      const meta = document.createElement('small');
+      meta.textContent = text(sourceKey) + (item.manual_only ? ' · ' + text('skillManualTag') : '');
+      chip.append(document.createTextNode(item.name + ' '), meta);
+      skillsList.append(chip);
+    }
+  }
   element('status-text').textContent = text(state.enabled ? 'enabled' : 'paused');
   element('file-auto-start').checked = state.fileAutoStart === true;
   element('tunnel-auto-start').checked = state.tunnel.autoStart === true;
   element('allow-file-management').checked = state.allow_file_management === true;
   element('allow-commands').checked = state.allow_commands === true;
+  element('enable-skills').checked = state.enableSkills === true;
+  element('enable-global-skills').checked = state.enableGlobalSkills === true;
+  element('enable-rules').checked = state.enableRules === true;
   element('enabled-description').textContent = text(state.enabled ? 'enabledHelp' : 'pausedHelp');
   element('access-state').classList.toggle('enabled', state.enabled);
   element('toggle').lastElementChild.textContent = text(state.enabled ? 'pause' : 'enable');
@@ -128,17 +246,18 @@ function render() {
   element('home-tool-dot').classList.toggle('online', !!lastTool);
   element('tunnel-badge').textContent = text(statusKey); element('tunnel-badge').classList.toggle('online', online);
   element('nav-connection-dot').classList.toggle('online', online);
-  element('connection-status').textContent = state.tunnel.error ? errorText(state.tunnel.error) : text(online ? 'tunnelOnlineHelp' : connecting ? 'tunnelConnectingHelp' : state.tunnel.configured ? 'configuredHelp' : 'notConfiguredHelp');
+  const isCfQuick = state.tunnel.provider === 'cloudflared' && state.tunnel.cloudflareMode === 'quick';
+  element('connection-status').textContent = state.tunnel.error ? errorText(state.tunnel.error) : text(online ? 'tunnelOnlineHelp' : connecting ? 'tunnelConnectingHelp' : isCfQuick ? 'cloudflareQuickReady' : state.tunnel.configured ? 'configuredHelp' : 'notConfiguredHelp');
   element('connection-status').classList.toggle('ready', online); element('connection-status').classList.toggle('error', !!state.tunnel.error);
   element('tunnel-toggle').lastElementChild.textContent = text(online ? 'stopTunnel' : connecting ? 'cancelTunnel' : 'startTunnel');
-  element('copy-link').disabled = !online;
+  element('copy-link').disabled = !online || !state.publicMcp;
   element('tunnel-save').disabled = connecting || online;
-  for (const id of ['domain', 'authtoken', 'auto-start']) element(id).disabled = connecting || online;
+  for (const id of ['tunnel-provider', 'cloudflare-mode', 'domain', 'authtoken', 'auto-start']) element(id).disabled = connecting || online;
   element('credential-badge').textContent = text(state.tunnel.configured ? 'configured' : 'unconfigured');
   element('credential-badge').classList.toggle('online', state.tunnel.configured);
-  element('token-status').textContent = text(state.tunnel.configured ? 'savedToken' : 'unsavedToken');
+  const displayBase = state.activePublicBase || state.publicBase || '';
   element('public-url').textContent = state.publicMcp || text('notConfiguredHelp');
-  element('connected-app-verification-url').textContent = state.publicBase ? state.publicBase + '/.well-known/google-connected-apps' : text('verificationDomainMissing');
+  element('connected-app-verification-url').textContent = displayBase ? displayBase + '/.well-known/google-connected-apps' : text('verificationDomainMissing');
   element('connected-app-badge').textContent = text(state.connectedAppVerificationConfigured ? 'verificationConfigured' : 'verificationMissing');
   element('connected-app-badge').classList.toggle('online', state.connectedAppVerificationConfigured);
   element('connected-app-verification-status').textContent = text(state.connectedAppVerificationConfigured ? 'verificationStored' : 'verificationNotStored');
@@ -155,7 +274,14 @@ function render() {
   element('last-request').textContent = state.traffic.lastRequestAt ? time(state.traffic.lastRequestAt) : text('none');
   element('tunnel-events').textContent = (state.tunnel.events || []).map(item => time(item.time) + '  ' + item.kind + (item.code ? '  ' + item.code : '')).join('\n') || text('noEvents');
   element('protocol-log').textContent = state.traffic.protocol.map(item => time(item.time) + '  ' + item.method + '  ' + item.status).join('\n') || text('noEvents');
-  if (!formLoaded) { element('domain').value = state.publicBase || ''; element('auto-start').checked = state.tunnel.autoStart; formLoaded = true; }
+  if (!formLoaded) {
+    element('tunnel-provider').value = state.tunnel.provider || 'ngrok';
+    element('cloudflare-mode').value = state.tunnel.cloudflareMode || 'quick';
+    element('domain').value = state.publicBase || '';
+    element('auto-start').checked = state.tunnel.autoStart;
+    formLoaded = true;
+  }
+  syncProviderForm();
   const items = [...state.history].reverse();
   element('nav-history-count').textContent = items.length; element('activity-count').textContent = text('records', { count: items.length });
   renderHistory('recent-history', items.slice(0, 1), true);
@@ -194,7 +320,15 @@ element('preferences-close').onclick = () => element('preferences-dialog').close
 element('language').addEventListener('change', event => perform('language', async () => {
   await api('preferences', { language: event.target.value });
 }));
-for (const [id, key] of [['file-auto-start', 'fileAutoStart'], ['tunnel-auto-start', 'tunnelAutoStart'], ['allow-file-management', 'allowFileManagement'], ['allow-commands', 'allowCommands']]) {
+for (const [id, key] of [
+  ['file-auto-start', 'fileAutoStart'],
+  ['tunnel-auto-start', 'tunnelAutoStart'],
+  ['allow-file-management', 'allowFileManagement'],
+  ['allow-commands', 'allowCommands'],
+  ['enable-skills', 'enableSkills'],
+  ['enable-global-skills', 'enableGlobalSkills'],
+  ['enable-rules', 'enableRules']
+]) {
   element(id).addEventListener('change', event => perform(id, async () => {
     await api('preferences', { [key]: event.target.checked });
     if (key === 'tunnelAutoStart') element('auto-start').checked = event.target.checked;
@@ -205,13 +339,38 @@ document.querySelectorAll('[data-filter]').forEach(node => node.addEventListener
   document.querySelectorAll('[data-filter]').forEach(button => button.classList.toggle('active', button === node)); render();
 }));
 element('choose').onclick = () => perform('choose', async () => { const result = await api('choose', {}); if (!result.cancelled) message(text('folderChanged')); });
+element('add-folder').onclick = () => perform('add-folder', async () => {
+  const result = await api('choose', { add: true });
+  if (!result.cancelled) message(text('folderChanged'));
+});
+element('add-skill-folder').onclick = () => perform('add-skill-folder', async () => {
+  const result = await api('choose', { skillDir: true });
+  if (!result.cancelled) message(text('skillFolderAdded'));
+});
+element('tunnel-provider').addEventListener('change', syncProviderForm);
+element('cloudflare-mode').addEventListener('change', syncProviderForm);
+element('install-cloudflared').onclick = () => perform('install-cloudflared', async () => {
+  await api('tunnel/install-cloudflared', {});
+  message(text('cloudflaredInstalled'));
+});
 element('copy-root').onclick = () => perform('copy-root', async () => { await navigator.clipboard.writeText(state.workspace); message(text('pathCopied')); });
 element('toggle').onclick = () => perform('toggle', () => api('settings', { enabled: !state.enabled }));
 element('access').addEventListener('change', event => perform('access', async () => { await api('settings', { access: event.target.value }); message(text('permissionChanged')); }));
-element('copy-link').onclick = () => perform('copy-link', async () => { if (state.tunnel.status !== 'online') return; await navigator.clipboard.writeText(state.publicMcp); message(text('linkCopied')); });
+element('copy-link').onclick = () => perform('copy-link', async () => { if (state.tunnel.status !== 'online' || !state.publicMcp) return; await navigator.clipboard.writeText(state.publicMcp); message(text('linkCopied')); });
 element('connection-form').addEventListener('submit', event => {
   event.preventDefault();
-  perform('tunnel-save', async () => { await api('tunnel/configure', { domain: element('domain').value, token: element('authtoken').value, autoStart: element('auto-start').checked }); element('authtoken').value = ''; formLoaded = false; message(text('settingsSaved')); });
+  perform('tunnel-save', async () => {
+    await api('tunnel/configure', {
+      provider: element('tunnel-provider').value,
+      cloudflareMode: element('cloudflare-mode').value,
+      domain: element('domain').value,
+      token: element('authtoken').value,
+      autoStart: element('auto-start').checked
+    });
+    element('authtoken').value = '';
+    formLoaded = false;
+    message(text('settingsSaved'));
+  });
 });
 element('connected-app-form').addEventListener('submit', event => {
   event.preventDefault();
@@ -266,7 +425,8 @@ function renderDiagnostics() {
   if (!diagnostics) return;
   const box = element('diagnostic-result'); box.replaceChildren();
   const title = document.createElement('h3'); title.textContent = text('diagnosticTitle'); box.append(title);
-  const english = ['Local MCP service', 'Workspace tools', 'Workspace access', 'ngrok client', 'Account token', 'HTTPS tunnel'];
+  const providerName = state?.tunnel?.provider === 'cloudflared' ? 'cloudflared' : 'ngrok';
+  const english = ['Local MCP service', 'Workspace tools', 'Workspace access', `${providerName} client`, `${providerName} credentials`, 'HTTPS tunnel'];
   for (const [index, item] of diagnostics.checks.entries()) {
     const row = document.createElement('div'), mark = document.createElement('span'), detail = document.createElement('span');
     row.className = 'diagnostic-check'; mark.textContent = item.ok ? '✓' : '○';

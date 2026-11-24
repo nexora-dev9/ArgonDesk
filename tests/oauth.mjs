@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { createOAuthAccessToken, verifyOAuthAccessToken } from '../oauth.mjs';
 
-const credentials = { clientId: 'argondesk-test-client', clientSecret: 'test-client-secret-value' };
+const credentials = { clientId: 'webagy-test-client', clientSecret: 'test-client-secret-value' };
 const context = { issuer: 'https://workspace.example', resource: 'https://workspace.example/mcp/test-key', now: 1_800_000_000 };
 const token = createOAuthAccessToken({ ...credentials, ...context });
 

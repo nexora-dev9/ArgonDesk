@@ -1,4 +1,4 @@
-# ArgonDesk
+# WebAgy
 
 > A bilingual Windows workspace that lets the Gemini website read large text, supported documents and images, and create/edit UTF-8 files in a user-selected local folder through native custom MCP. No Gemini model API key is needed.
 
@@ -14,7 +14,7 @@ Use cases: Gemini web local file access; Gemini website MCP filesystem; browser 
 - [额度、思考与创作质量](docs/USAGE.zh-CN.md)
 - [Security and limits](SECURITY.md)
 
-Current scope: Windows x64; eleven tools for scoped reading/writing, finding/searching and separately authorized moving/recycling and PowerShell builds/tests; integrated ngrok management and opt-in startup restoration; English/Simplified Chinese UI. run_command checks cwd but runs with current-user permissions and is not a filesystem sandbox. No automatic Windows elevation, direct binary editing or browser control. Google confirmation depends on the app's registration/configuration. Other tunnel providers remain roadmap items. Independent MIT-licensed preview.
+Current scope: WebAgy 1.0.0 (formerly ArgonDesk), Windows x64 with 12 MCP tools. Gemini web Chat and Task can read/write authorized folders, search, organize files and read local Skills with read_skill. Includes folder-specific read-only locks, snapshots, ngrok, and Cloudflare Quick and Named Tunnels. Fresh installs use English. Preferences saves English or Simplified Chinese across launches. Powershell commands require a separate grant and run as the current Windows user. Independent MIT-licensed project.
 
 Agent tool parameters, permissions, LF/CRLF editing, auditing and limits: docs/AGENT_TOOLS.md and docs/AGENT_TOOLS.zh-CN.md.
 

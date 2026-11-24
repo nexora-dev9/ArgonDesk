@@ -1,4 +1,4 @@
-﻿param([string]$InitialPath, [ValidateSet('zh-CN','en')][string]$Language = 'zh-CN')
+﻿param([string]$InitialPath, [ValidateSet('zh-CN','en')][string]$Language = 'en')
 $ErrorActionPreference = 'Stop'
 [Console]::OutputEncoding = [Text.UTF8Encoding]::new($false)
 Add-Type -AssemblyName System.Windows.Forms

@@ -1,6 +1,6 @@
 # Reading documents large files and images
 
-Version 0.4.5 extended `read_file` with document/binary support; 0.4.6 retains those features and adds [search, organization and command tools](AGENT_TOOLS.md) for eleven tools total. Folder scope, read-only permissions and pause controls remain. No manual DOCX-to-TXT export is needed.
+WebAgy includes document and binary reading, file search, organization, commands and local Skills in its [12-tool workspace](AGENT_TOOLS.md). You can read DOCX directly. Folder scope, read-only permissions and pause controls still apply.
 
 | Input | Default result |
 | --- | --- |

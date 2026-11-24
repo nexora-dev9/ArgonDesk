@@ -6,7 +6,7 @@
 
 Confirm the [official account requirements](https://support.google.com/gemini/answer/17209137) and use the English website. A local UI language change does not change Gemini. The feature may be unavailable for your account; the workbench cannot unlock it.
 
-## @ArgonDesk stays ordinary text
+## @WebAgy stays ordinary text
 
 Type @, then choose the app from the site's menu. Use the name you registered; manual spelling and font color do not prove a connection. Refresh after adding the app. An old Insert conversation may need a new task.
 
@@ -16,7 +16,7 @@ That is text, not proof of execution. Native calls should produce real tool card
 
 ## It keeps asking Allow
 
-For a manually added custom MCP app, Gemini requires manual confirmation for every write. To remove per-write prompts, use the registered Connected Apps Platform route and clear User confirmation required for write_file, edit_file and create_directory in Connected Console. See the [registration guide](CONNECTED_APPS_PLATFORM.md). ArgonDesk does not auto-click or disguise write tools as read-only.
+For a manually added custom MCP app, Gemini requires manual confirmation for every write. To remove per-write prompts, use the registered Connected Apps Platform route and clear User confirmation required for write_file, edit_file and create_directory in Connected Console. See the [registration guide](CONNECTED_APPS_PLATFORM.md). WebAgy does not auto-click or disguise write tools as read-only.
 
 ## Tunnel connecting / online but files do not change
 
@@ -26,11 +26,11 @@ If the tunnel is online, check file access is enabled, the correct folder/permis
 
 ## TUN and domestic sites
 
-TUN alone does not imply global proxy. Inspect rules and actual connection matches. A browser proxy does not automatically route the ngrok process. ArgonDesk changes none of those settings. See [Networking](NETWORKING.md).
+TUN alone does not imply global proxy. Inspect rules and actual connection matches. A browser proxy does not automatically route the ngrok process. WebAgy changes none of those settings. See [Networking](NETWORKING.md).
 
 ## First-run download or signature failure
 
-Start-ArgonDesk.cmd runs Install-Tunnel.ps1 when the client is absent. It needs access to the official download and certificate validation. Inspect the error, download source and Windows policy. Do not skip signature verification. Public ZIPs intentionally do not contain ngrok.
+Start-WebAgy.cmd runs Install-Tunnel.ps1 when the client is absent. It needs access to the official download and certificate validation. Inspect the error, download source and Windows policy. Do not skip signature verification. Public ZIPs intentionally do not contain ngrok.
 
 For a source build, install Node.js 22+, run Setup.ps1 and Build.ps1. Keep all extracted files together. If port 3008 is occupied, identify its owner rather than killing every Node process.
 

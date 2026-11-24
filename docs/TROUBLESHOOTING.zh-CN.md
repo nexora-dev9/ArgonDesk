@@ -6,7 +6,7 @@
 
 核对 [Google 账户要求](https://support.google.com/gemini/answer/17209137)，使用英文官网。本地语言切换不会改变官网语言；工作台无法解锁账户尚未开放的功能。
 
-## @ArgonDesk 只是普通文字
+## @WebAgy 只是普通文字
 
 输入 @ 后，从官网菜单点选自己注册的应用。手拼名称和字体颜色都不证明连接。添加后刷新；混入旧 Insert 指令的对话建议另开任务。
 
@@ -30,7 +30,7 @@
 
 ## 首次下载或签名失败
 
-客户端不存在时，Start-ArgonDesk.cmd 调用 Install-Tunnel.ps1；需要访问官方下载站点并完成证书校验。核对错误、来源和 Windows 策略，不要跳过签名验证。公开 ZIP 有意不含 ngrok。
+客户端不存在时，Start-WebAgy.cmd 调用 Install-Tunnel.ps1；需要访问官方下载站点并完成证书校验。核对错误、来源和 Windows 策略，不要跳过签名验证。公开 ZIP 有意不含 ngrok。
 
 源码安装需 Node.js 22+、Setup.ps1 和 Build.ps1。保留完整解压目录。3008 端口被占用时先识别占用进程，不要结束所有 Node 进程。
 

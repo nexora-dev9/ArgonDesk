@@ -28,7 +28,9 @@ try {
     try { target = files.resolve(relative); stat = fs.lstatSync(target); } catch { skipped++; continue; }
     if (stat.isDirectory()) {
       if (path.relative(root, target) && ignored.has(path.basename(target).toLowerCase())) continue;
-      const children = fs.readdirSync(target).sort().reverse();
+      let children;
+      try { children = fs.readdirSync(target).sort().reverse(); }
+      catch { skipped++; continue; }
       for (const child of children) stack.push(path.join(relative, child));
       continue;
     }

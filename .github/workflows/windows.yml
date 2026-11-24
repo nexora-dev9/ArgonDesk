@@ -40,6 +40,6 @@ jobs:
           .\Pack.ps1
       - uses: actions/upload-artifact@v7.0.2
         with:
-          name: ArgonDesk-Windows-x64
+          name: WebAgy-Windows-x64
           path: dist/*
           if-no-files-found: error

@@ -4,7 +4,7 @@
 
 ## What 0.4.2 changes
 
-ArgonDesk is the local file destination, not a subject the model needs to research. Its short MCP instructions explain this and ask the model to preserve detail, animation and interactivity.
+WebAgy is the local file destination, not a subject the model needs to research. Its short MCP instructions explain this and ask the model to preserve detail, animation and interactivity.
 
 For a simple new file, the available path is:
 
@@ -26,17 +26,17 @@ A local file tool saves exactly the supplied text; it does not convert a static 
 
 The tool guidance prefers animation for action scenes unless a still is requested. This is an instruction to the model, not a backend animation generator or guarantee. Open the result and check playback. A successful write confirms saving, not visual correctness.
 
-For standalone artwork that needs no existing local context, generating it in ordinary Chat and downloading the file can avoid Task tool rounds entirely. ArgonDesk is useful when the conversation needs to read, create and revise a local project.
+For standalone artwork that needs no existing local context, generating it in ordinary Chat and downloading the file can avoid Task tool rounds entirely. WebAgy is useful when the conversation needs to read, create and revise a local project.
 
 ## Thinking levels
 
-Google's [model help](https://support.google.com/gemini/answer/18648722?hl=en) says an unselected thinking level defaults to Low. The Task menu inspected on 2026-10-16 exposed Flash and Argon without a thinking-level selector. That UI does not establish its hidden reasoning budget. ArgonDesk cannot read or set it through file tools; check the controls available to your account.
+Google's [model help](https://support.google.com/gemini/answer/18648722?hl=en) says an unselected thinking level defaults to Low. The Task menu inspected on 2026-10-16 exposed Flash and Argon without a thinking-level selector. That UI does not establish its hidden reasoning budget. WebAgy cannot read or set it through file tools; check the controls available to your account.
 
 ## Five-hour and weekly limits
 
 Google documents [compute-based limits](https://support.google.com/gemini/answer/16275805?hl=en) affected by prompt complexity, model/features and conversation length. Five-hour and weekly caps use different totals. Reaching the shorter cap while most weekly allowance remains is possible; the weekly balance does not override it.
 
-A 17% Chat run and a 27% Task run do not isolate the cause: output length, model, thinking, context and tool rounds may differ. ArgonDesk's request and byte counters cannot convert those percentages to tokens or reset/transfer either allowance.
+A 17% Chat run and a 27% Task run do not isolate the cause: output length, model, thinking, context and tool rounds may differ. WebAgy's request and byte counters cannot convert those percentages to tokens or reset/transfer either allowance.
 
 ## Startup and updating
 

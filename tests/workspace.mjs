@@ -28,6 +28,16 @@ check('UTF-8 create/read/exact-edit round trip', () => {
   files.run('edit_file', { ...args, old_text: '原文', new_text: '已编辑' });
   assert.equal(files.run('read_file', args).text, '你好，Gemini\n已编辑');
 });
+check('Authorized additional roots accept absolute paths without widening access elsewhere', () => {
+  const scoped = new WorkspaceFiles({ ...config, roots: [second] });
+  const target = path.join(second, 'folder', 'new.txt');
+  scoped.run('write_file', { ...args, path: target, content: 'SECOND_ROOT', mode: 'create' });
+  assert.equal(scoped.run('read_file', { ...args, path: target }).text, 'SECOND_ROOT');
+  assert.equal(scoped.info().roots.length, 2);
+  assert.throws(() => scoped.run('write_file', { ...args, path: outside, content: 'BAD' }));
+  assert.throws(() => scoped.run('write_file', { ...args, path: path.join(fixture, 'outside2.txt'), content: 'BAD' }));
+  assert.throws(() => scoped.resolve(second + path.sep + '..' + path.sep + 'outside.txt'));
+});
 check('Create-only writes make parent folders and refuse to overwrite existing content', () => {
   const target = { ...args, path: 'new/nested/result.svg', mode: 'create', content: '<svg><animate attributeName="opacity" values="0;1" dur="2s"/></svg>' };
   files.run('write_file', target);
@@ -163,7 +173,7 @@ try {
   await new Promise((resolve, reject) => {
     const timeout = setTimeout(() => reject(new Error('Test server did not start: ' + stderr)), 8000);
     child.once('exit', () => { clearTimeout(timeout); reject(new Error(stderr)); });
-    child.stdout.on('data', value => { if (value.toString().includes('gemini-workspace')) { clearTimeout(timeout); resolve(); } });
+    child.stdout.on('data', value => { if (value.toString().includes('webagy')) { clearTimeout(timeout); resolve(); } });
   });
   let state = await (await fetch(address + '/api/state')).json();
   assert.equal((await post('/api/settings', { enabled: true })).status, 403);
@@ -202,7 +212,7 @@ try {
   assert.equal(verificationResponse.status, 200);
   assert.deepEqual(JSON.parse(verificationResponse.body), { verification_tokens: ['local-test-verification-token'] });
   assert.equal((await post('/api/connected-apps/verification', { verification: '{"verification_tokens":[]}' }, state.csrf)).status, 400);
-  for (const route of ['/privacy', '/terms', '/help']) assert.equal((await getPublic(route)).status, 200);
+  for (const route of ['/privacy', '/terms', '/help', '/favicon.ico', '/app-icon-512.png', '/app-icon.svg', '/apple-touch-icon.png']) assert.equal((await getPublic(route)).status, 200);
   assert.equal((await getPublic('/api/state')).status, 403);
   checks.push({ name: 'Google domain challenge and public policy pages are reachable only on the configured public host', passed: true });
   const oauthMeta = await getPublic('/.well-known/oauth-authorization-server');
@@ -248,11 +258,11 @@ try {
   assert.equal((await fetch(address + '/mcp/wrong-key', { method: 'POST' })).status, 404);
   checks.push({ name: 'MCP capability credential required', passed: true });
   await client.connect(new StreamableHTTPClientTransport(new URL(state.localMcp)));
-  assert.equal(client.getServerVersion().name, 'ArgonDesk');
+  assert.equal(client.getServerVersion().name, 'WebAgy');
   assert.match(client.getInstructions(), /Preserve requested detail, animation and interactivity/);
   const tools = (await client.listTools()).tools;
-  assert.deepEqual(tools.map(tool => tool.name).sort(), ['workspace_info', 'list_files', 'read_file', 'write_file', 'edit_file', 'create_directory', 'find_files', 'search_text', 'move_path', 'delete_path', 'run_command'].sort());
-  checks.push({ name: 'Real SDK handshake and eleven workspace tools', passed: true });
+  assert.deepEqual(tools.map(tool => tool.name).sort(), ['workspace_info', 'list_files', 'read_file', 'write_file', 'edit_file', 'create_directory', 'find_files', 'search_text', 'move_path', 'delete_path', 'run_command', 'read_skill'].sort());
+  checks.push({ name: 'Real SDK handshake and twelve workspace tools', passed: true });
   assert.equal((await client.callTool({ name: 'workspace_info', arguments: {} })).isError, true);
   await post('/api/settings', { enabled: true }, state.csrf);
   const infoResult = await client.callTool({ name: 'workspace_info', arguments: {} });

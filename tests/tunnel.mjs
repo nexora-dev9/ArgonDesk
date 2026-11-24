@@ -31,7 +31,7 @@ await tunnel.configure({domain:'sample.ngrok-free.dev',token:'',autoStart:true})
 assert.equal(config.tunnelAutoStart,true);
 assert.equal(fs.readFileSync(tunnel.tokenPath,'utf8'),encrypted);
 const policyExpression = buildTrafficPolicy({ key: 'test-capability-key' }).on_http_request[0].expressions[0];
-for (const route of ['/mcp', '/mcp/test-capability-key', '/.well-known/google-connected-apps', '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/oauth/token', '/privacy', '/terms', '/help']) {
+for (const route of ['/mcp', '/mcp/test-capability-key', '/.well-known/google-connected-apps', '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/oauth/token', '/privacy', '/terms', '/help', '/favicon.ico', '/app-icon-512.png', '/app-icon.svg', '/apple-touch-icon.png']) {
   assert.ok(policyExpression.includes(`req.url.path != '${route}'`));
 }
 assert.ok(policyExpression.includes(' && '));

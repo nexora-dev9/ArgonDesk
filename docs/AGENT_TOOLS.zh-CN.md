@@ -1,8 +1,8 @@
-# 检索、文件整理与构建测试 · 0.4.6
+# 检索、文件整理与构建测试 · 1.0.0
 
 [English](AGENT_TOOLS.md) · [返回说明](../README.zh-CN.md)
 
-先调用 `workspace_info`，复用它返回的 `workspace_id`。所有工具均要求文件访问已启用。所有路径参数必须相对当前根目录，禁止绝对路径、`..`、NTFS 附加流、设备别名和链接；不得移动/覆盖/删除根目录。切换文件夹、改变读写模式或重启后，重新取得编号。
+先调用 `workspace_info`，复用它返回的 `workspace_id`。所有工具均要求文件访问已启用。相对路径以主目录为基准，绝对路径须位于已授权目录内。禁止 `..`、NTFS 附加流、设备别名和链接。只读锁覆盖子目录、文件整理和快照恢复。切换目录、改变权限或重启后，重新取得编号。
 
 | 工具 | 参数（除 workspace_id 外） | 默认与结果 |
 | --- | --- | --- |
@@ -11,6 +11,7 @@
 | `move_path` | `src`, `dst`, `overwrite=false` | 移动文件或整个目录，补齐父目录；不默认覆盖，禁止源目标互为祖先 |
 | `delete_path` | `path`, `to_trash=true` | 默认通过 Windows Shell 回收站 API 删除；无法回收时失败，不退化为永久删除。`false` 明确表示永久删除 |
 | `run_command` | `command`, `cwd="."`, `timeout_sec=120` | PowerShell 5.1；超时允许 1–600 秒，命令不超过 8000 字符。返回 `exit_code/stdout/stderr` 及耗时、截断/超时/取消标志 |
+| `read_skill` | `name`，可选 `resource_path` | 读取已发现的本地 Skill 并列出资料，或读取其中一项相对路径的文本资料 |
 
 检索默认忽略 `node_modules`、`.venv`、`.git`、`__pycache__`、`dist`、`build`，不跟随链接。`find_files` 搜索文件，不返回目录；无通配符时按文件名片段匹配。含斜杠的模式相对工作区根目录匹配，`path` 仅缩小遍历范围；文件名匹配不区分大小写。检索文本不解析 Office/PDF 等二进制正文；用 `read_file` 读取这些文档。文本可超过 2 MiB，采用流式读取。单行超过 65,536 字符会跳过并计数，匹配行预览至多 1000 字符；单次扫描有 100,000 文件、约 8 秒和响应大小预算，异常正则在独立线程中最多运行 10 秒。请检查 `truncated` 和跳过计数，再缩小 `path` 或改用 `read_file` 续读。
 
@@ -20,7 +21,7 @@
 
 主界面左下角或右上角齿轮 → **偏好设置**：
 
-- **打开时自动连接隧道**：使用“连接设置”中保存的 ngrok 账户。
+- **打开时自动连接隧道**：使用「连接设置」中保存的提供方和配置。
 - **启动时自动启用文件工具**：打开软件时恢复当前目录与已保存权限。
 - **允许 AI 移动和删除文件**：控制 `move_path/delete_path`。
 - **允许 AI 执行工作区命令**：控制 `run_command`。
@@ -39,4 +40,4 @@
 
 `edit_file` 对 CRLF/LF 归一化后唯一匹配，替换写回保留原文件的换行风格和未修改部分的字节内容；批量替换仍是全部匹配成功才写入。文本写入/编辑大小上限仍为 2 MiB，不代表可直接编辑 Office 等二进制包。
 
-源码版运行 `Build.ps1` 生成 `ArgonDesk.exe` 和 `ArgonDesk.WorkspaceHost.exe`，后者实现命令作业对象和回收站操作。更新后应在 MCP 工具发现中看到 11 项；官网若缓存旧目录，刷新应用/新开任务后检查。新增工具在本地标准 MCP 验证；官网是否主动使用及是否逐次确认由 Google 和应用配置决定。
+源码版运行 `Build.ps1` 生成桌面入口和工作区助手。MCP 工具发现应显示 12 项。官网仍显示旧列表时，刷新应用，或到 [Gemini Developer Mode](https://developers.google.com/connected-apps/mcp/dev-mode/usage) 点 **Sync schema**。

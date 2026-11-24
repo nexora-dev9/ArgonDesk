@@ -1,5 +1,21 @@
 # Changelog / 更新记录
 
+## 1.0.0 — WebAgy 1.0: Local Skills, Snapshots, Per-Root Read-Only & Cloudflare Tunnel / 正式更名 WebAgy 1.0：本地 Skills、快照回滚、目录独立只读与 Cloudflare 隧道
+
+- Rebranded the project to **WebAgy** (`WebAgy.exe`, `WebAgy.WorkspaceHost.exe`, `Start-WebAgy.cmd`, MCP server name `WebAgy`) and released v1.0.0.
+- Added read-only local Skills discovery (`skills.mjs`) and the 12th MCP tool `read_skill`, supporting user-selected custom skill folders (single skill, skills root, or nested `.agents/skills`), workspace/additional-root `.agents/skills`, global `~/.gemini/config/skills.json` / `~/.agents/skills`, `hidden`/`disable-model-invocation` frontmatter handling, and optional `AGENTS.md` / `GEMINI.md` always-on rules in `workspace_info`.
+- Added automatic pre-write/pre-edit file snapshots (`snapshots.mjs`, up to 30 snapshots) and one-click restore in Activity with automatic safety backup before restoring.
+- Added per-root read-only locks (`readOnlyRoots` / `root_permissions`) and graceful handling for temporarily unmounted additional drives/folders.
+- Added Cloudflare Tunnel (`cloudflared`) provider support alongside ngrok, with both zero-account Quick Tunnel and DPAPI-encrypted Named Tunnel (Token) modes, plus signed `cloudflared` installation in `Install-Tunnel.ps1`.
+- Fresh installations open in English. Preferences remembers English or Simplified Chinese across launches. Nested folders and snapshot restores respect read-only locks.
+
+- 正式更名为 **WebAgy**（`WebAgy.exe`、`WebAgy.WorkspaceHost.exe`、`Start-WebAgy.cmd` 及 MCP 服务名 `WebAgy`）并发布 1.0.0。
+- 新增只读本地 Skills 引擎（`skills.mjs`）与第 12 项 MCP 工具 `read_skill`，支持界面自选多个 Skill 文件夹、主/附加工作区 `.agents/skills`、全局 `~/.gemini/config/skills.json` 与 `~/.agents/skills`，并在 `workspace_info` 注入轻量技能索引及可选的 `AGENTS.md` / `GEMINI.md` 常驻规则。
+- 新增写入/编辑前自动文件快照（`snapshots.mjs`，保留最近 30 份）及“操作记录”一键恢复功能，恢复前自动备份当前版本以防误恢复。
+- 新增附加授权目录独立只读锁定（`readOnlyRoots` / `root_permissions`），并修复未挂载磁盘/离线附加目录导致无法增删其他目录的问题。
+- 新增 Cloudflare Tunnel（`cloudflared`）支持，提供免账号快速临时隧道与固定域名命名隧道（Token 经 DPAPI 加密保存）两种模式，并在连接页支持一键下载并校验官方签名安装。
+- 新安装默认英文，偏好设置会记住英文或简体中文。嵌套目录及快照恢复统一遵守只读权限。
+
 ## 0.4.6 — Search, organization and commands / 检索、整理与命令
 
 - Added find_files/search_text with dependency-directory exclusions, bounded results and worker-isolated regex timeouts.

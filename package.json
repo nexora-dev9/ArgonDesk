@@ -1,15 +1,15 @@
 {
-  "name": "argondesk",
-  "version": "0.4.6",
+  "name": "webagy",
+  "version": "1.0.0",
   "private": true,
-  "description": "Local folder-scoped MCP tools and a bilingual Windows workspace for the Gemini website",
+  "description": "WebAgy — Local folder-scoped MCP workspace, Skills engine and bilingual Windows bridge for Gemini Web",
   "type": "module",
   "engines": {
     "node": ">=22.13.0"
   },
   "scripts": {
     "start": "node server.mjs",
-    "test": "node tests/oauth.mjs && node tests/workspace.mjs && node tests/reading.mjs && node tests/startup.mjs && node tests/tunnel.mjs && node tests/agent-tools.mjs"
+    "test": "node tests/oauth.mjs && node tests/workspace.mjs && node tests/reading.mjs && node tests/startup.mjs && node tests/tunnel.mjs && node tests/agent-tools.mjs && node tests/skills-and-features.mjs"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "1.32.1",

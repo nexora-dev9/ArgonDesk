@@ -164,7 +164,7 @@ try {
   const state = await (await fetch(address + '/api/state')).json();
   await client.connect(new StreamableHTTPClientTransport(new URL(state.localMcp)));
   const tools = (await client.listTools()).tools;
-  assert.equal(tools.length, 11); assert.ok(tools.find(v => v.name === 'read_file').inputSchema.properties.view);
+  assert.equal(tools.length, 12); assert.ok(tools.find(v => v.name === 'read_file').inputSchema.properties.view);
   const call = (name, extra = {}) => client.callTool({ name: 'read_file', arguments: { workspace_id: state.workspace_id, path: name, ...extra } });
   await check('Real MCP returns DOCX text instead of Promise/empty JSON and discovers images', async () => {
     const r = await call('large.docx'); assert.equal(r.isError, false); assert.match(JSON.parse(r.content[0].text).text, /ADDED_PARAGRAPH_AT_END/);

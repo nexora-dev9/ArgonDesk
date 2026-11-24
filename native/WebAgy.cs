@@ -10,13 +10,14 @@ using System.Runtime.InteropServices;
 using System.Web.Script.Serialization;
 using System.Windows.Forms;
 
-internal static class ArgonDesk
+internal static class WebAgy
 {
     private static readonly string Root = AppDomain.CurrentDomain.BaseDirectory;
     private const string Address = "http://127.0.0.1:3008";
-    private static string language = "zh-CN";
+    private static string language = "en";
+    private static string NormalizeLanguage(object value) { return Convert.ToString(value) == "zh-CN" ? "zh-CN" : "en"; }
     private static string T(string chinese, string english) { return language == "en" ? english : chinese; }
-    private static string WindowTitle { get { return T("ArgonDesk — Gemini 工作台", "ArgonDesk — Gemini Workspace"); } }
+    private static string WindowTitle { get { return T("WebAgy — Gemini 本地工作台", "WebAgy — Local Workspace for Gemini"); } }
     [DllImport("user32.dll", CharSet = CharSet.Unicode)] private static extern IntPtr FindWindow(string className, string title);
     [DllImport("user32.dll")] private static extern bool SetForegroundWindow(IntPtr handle);
     [DllImport("user32.dll")] private static extern bool ShowWindow(IntPtr handle, int command);
@@ -30,8 +31,10 @@ internal static class ArgonDesk
     {
         try { using (var client = new LocalClient()) {
             var health = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(client.DownloadString(Address + "/healthz"));
-            object value; if (health.TryGetValue("language", out value)) language = Convert.ToString(value) == "en" ? "en" : "zh-CN";
-            return health.TryGetValue("app", out value) && Convert.ToString(value) == "gemini-workspace";
+            object value; if (health.TryGetValue("language", out value)) language = NormalizeLanguage(value);
+            if (!health.TryGetValue("app", out value)) return false;
+            var app = Convert.ToString(value);
+            return app == "webagy" || app == "gemini-workspace";
         } }
         catch { return false; }
     }
@@ -58,7 +61,7 @@ internal static class ArgonDesk
             client.UploadString(Address + "/api/startup/restore", "POST", "{}");
         } } catch { }
         var window = FindWindow(null, WindowTitle);
-        if (window == IntPtr.Zero) window = FindWindow(null, T("ArgonDesk — Gemini Workspace", "ArgonDesk — Gemini 工作台"));
+        if (window == IntPtr.Zero) window = FindWindow(null, T("WebAgy — Local Workspace for Gemini", "WebAgy — Gemini 本地工作台"));
         if (window != IntPtr.Zero) { ShowWindow(window, 9); SetForegroundWindow(window); return; }
         var edge = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86), "Microsoft\\Edge\\Application\\msedge.exe");
         if (!File.Exists(edge)) edge = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), "Microsoft\\Edge\\Application\\msedge.exe");
@@ -90,20 +93,20 @@ internal static class ArgonDesk
         public TrayContext()
         {
             var menu = new ContextMenuStrip();
-            var openItem = menu.Items.Add(T("打开 ArgonDesk", "Open ArgonDesk"), null, (sender, args) => { if (Healthy() || StartBackend()) OpenPanel(); });
+            var openItem = menu.Items.Add(T("打开 WebAgy", "Open WebAgy"), null, (sender, args) => { if (Healthy() || StartBackend()) OpenPanel(); });
             menu.Items.Add(new ToolStripSeparator());
             var stopItem = menu.Items.Add(T("停止服务并退出", "Stop service and quit"), null, (sender, args) => {
                 if (StopBackend()) ExitThread();
-                else MessageBox.Show(T("服务暂时未能停止，请稍后重试。工作台仍保留在托盘中。", "The service has not stopped yet. Please retry; ArgonDesk remains in the system tray."), "ArgonDesk", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                else MessageBox.Show(T("服务暂时未能停止，请稍后重试。工作台仍保留在托盘中。", "The service has not stopped yet. Please retry; WebAgy remains in the system tray."), "WebAgy", MessageBoxButtons.OK, MessageBoxIcon.Information);
             });
-            tray = new NotifyIcon { Text = T("ArgonDesk · Gemini 工作台", "ArgonDesk · Gemini Workspace"), Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath), ContextMenuStrip = menu, Visible = true };
+            tray = new NotifyIcon { Text = T("WebAgy · Gemini 本地工作台", "WebAgy · Local Workspace for Gemini"), Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath), ContextMenuStrip = menu, Visible = true };
             tray.DoubleClick += (sender, args) => { if (Healthy() || StartBackend()) OpenPanel(); };
             timer = new System.Windows.Forms.Timer { Interval = 1800 };
             timer.Tick += (sender, args) => {
                 if (Healthy()) missed = 0; else if (++missed >= 3) ExitThread();
-                openItem.Text = T("打开 ArgonDesk", "Open ArgonDesk");
+                openItem.Text = T("打开 WebAgy", "Open WebAgy");
                 stopItem.Text = T("停止服务并退出", "Stop service and quit");
-                tray.Text = T("ArgonDesk · Gemini 工作台", "ArgonDesk · Gemini Workspace");
+                tray.Text = T("WebAgy · Gemini 本地工作台", "WebAgy · Local Workspace for Gemini");
             };
             timer.Start(); OpenPanel();
         }
@@ -115,15 +118,15 @@ internal static class ArgonDesk
         Application.EnableVisualStyles(); Application.SetCompatibleTextRenderingDefault(false);
         try {
             var saved = new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(File.ReadAllText(Path.Combine(Root, ".local", "state", "config.json")));
-            object value; if (saved.TryGetValue("language", out value)) language = Convert.ToString(value) == "en" ? "en" : "zh-CN";
+            object value; if (saved.TryGetValue("language", out value)) language = NormalizeLanguage(value);
         } catch { }
         bool created;
-        using (var mutex = new Mutex(true, "Local\\ArgonDesk-LocalWorkspace", out created))
+        using (var mutex = new Mutex(true, "Local\\WebAgy-LocalWorkspace", out created))
         {
             bool ownsMutex = created;
             try
             {
-                if (!StartBackend()) { MessageBox.Show(T("工作台未能启动。请确认文件已完整解压；源码版请先运行“安装依赖.cmd”。\n\n运行日志位于 .local\\state。", "ArgonDesk could not start. Fully extract the package; for a source build, run Setup.ps1 first.\n\nLogs are in .local\\state."), "ArgonDesk", MessageBoxButtons.OK, MessageBoxIcon.Information); return 1; }
+                if (!StartBackend()) { MessageBox.Show(T("WebAgy 未能启动。请确认文件已完整解压；源码版请先运行“安装依赖.cmd”。\n\n运行日志位于 .local\\state。", "WebAgy could not start. Fully extract the package; for a source build, run Setup.ps1 first.\n\nLogs are in .local\\state."), "WebAgy", MessageBoxButtons.OK, MessageBoxIcon.Information); return 1; }
                 if (!ownsMutex)
                 {
                     try { ownsMutex = mutex.WaitOne(0); }
@@ -132,7 +135,7 @@ internal static class ArgonDesk
                 if (!ownsMutex) { OpenPanel(); return 0; }
                 Application.Run(new TrayContext()); return 0;
             }
-            catch { MessageBox.Show(T("启动未完成，请重新打开 ArgonDesk。请保留软件目录和 .local 中的运行依赖。", "Startup did not finish. Reopen ArgonDesk and keep its software folder and .local runtime dependencies together."), "ArgonDesk", MessageBoxButtons.OK, MessageBoxIcon.Information); return 1; }
+            catch { MessageBox.Show(T("启动未完成，请重新打开 WebAgy。请保留软件目录和 .local 中的运行依赖。", "Startup did not finish. Reopen WebAgy and keep its software folder and .local runtime dependencies together."), "WebAgy", MessageBoxButtons.OK, MessageBoxIcon.Information); return 1; }
             finally { if (ownsMutex) mutex.ReleaseMutex(); }
         }
     }

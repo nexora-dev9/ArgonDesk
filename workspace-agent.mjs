@@ -6,7 +6,7 @@ import { spawn } from 'node:child_process';
 import { Worker } from 'node:worker_threads';
 
 const base = path.dirname(fileURLToPath(import.meta.url));
-const host = path.join(base, 'ArgonDesk.WorkspaceHost.exe');
+const host = path.join(base, 'WebAgy.WorkspaceHost.exe');
 function requireHost() {
   if (process.platform !== 'win32' || !fs.existsSync(host)) throw new Error('请运行 Build.ps1，生成 Windows 命令与回收站助手。');
 }
@@ -32,6 +32,7 @@ function collector(limit = 16384) {
 export function runCommand(files, args) {
   checkAgentPermission(files, args.workspace_id, 'allowCommands');
   const cwd = files.resolve(args.cwd ?? '.');
+  files.assertWritablePath(cwd);
   if (!fs.statSync(cwd).isDirectory()) throw new Error('命令 cwd 必须是工作区内的目录。');
   if (typeof args.command !== 'string' || !args.command.trim() || args.command.length > 8000 || args.command.includes('\0')) throw new Error('命令必须是 1–8000 字符的文本。');
   const seconds = args.timeout_sec ?? 120;
@@ -64,6 +65,7 @@ export function runCommand(files, args) {
 }
 export function searchWorkspace(files, name, args) {
   files.check(args.workspace_id);
+  const scope = files.scope(args.path ?? '.');
   files.resolve(args.path ?? '.');
   if (name === 'find_files') {
     if (typeof args.pattern !== 'string' || !args.pattern || args.pattern.length > 1024 || args.pattern.includes('\0') || path.win32.isAbsolute(args.pattern) || path.posix.isAbsolute(args.pattern) || args.pattern.includes(':') || args.pattern.split(/[\\/]/).includes('..')) throw new Error('搜索 pattern 只接受工作区内的 glob 或文件名，不允许绝对路径或 ..。');
@@ -72,13 +74,20 @@ export function searchWorkspace(files, name, args) {
   if (!Number.isInteger(max) || max < 1 || max > 1000) throw new Error('max_results 应为 1–1000。');
   return new Promise((resolve, reject) => {
     const worker = new Worker(new URL('./workspace-search-worker.mjs', import.meta.url), {
-      workerData: { root: files.config.root, workspaceId: args.workspace_id, name, args: { ...args, max_results: max } },
+      workerData: { root: scope.root, workspaceId: args.workspace_id, name, args: { ...args, path: scope.within || '.', max_results: max } },
       execArgv: [], resourceLimits: { maxOldGenerationSizeMb: 128 }
     });
     const timer = setTimeout(() => { worker.terminate(); reject(new Error('搜索或正则匹配超时，请缩小 path 或简化正则。')); }, 10000);
     worker.once('message', message => {
       clearTimeout(timer); worker.terminate();
-      try { files.check(args.workspace_id); files.resolve(args.path ?? '.'); if (message.error) throw new Error(message.error); resolve(message); } catch (error) { reject(error); }
+      try {
+        files.check(args.workspace_id); files.resolve(args.path ?? '.');
+        if (message.error) throw new Error(message.error);
+        if (scope.root !== files.config.root || path.isAbsolute(args.path ?? '.')) {
+          message.results = message.results.map(item => ({ ...item, path: path.join(scope.root, item.path) }));
+        }
+        resolve(message);
+      } catch (error) { reject(error); }
     });
     worker.once('error', error => { clearTimeout(timer); reject(error); });
     worker.once('exit', code => { clearTimeout(timer); if (code) reject(new Error('搜索进程已停止。')); });
@@ -94,7 +103,7 @@ async function preflightTree(files, id, relative) {
     if (count % 100 === 0) await new Promise(resolve => setImmediate(resolve));
   }
 }
-function rootMutation(files, target) { if (path.relative(files.config.root, target) === '') throw new Error('禁止移动、覆盖或删除工作区根目录。'); }
+function rootMutation(files, target) { if (path.relative(files.scope(target).root, target) === '') throw new Error('禁止移动、覆盖或删除工作区根目录。'); }
 function recycle(target) {
   requireHost();
   return new Promise((resolve, reject) => {
@@ -111,6 +120,7 @@ export async function managePath(files, name, args) {
   checkAgentPermission(files, args.workspace_id, 'allowFileManagement');
   if (name === 'delete_path') {
     const target = files.resolve(args.path); rootMutation(files, target);
+    files.assertWritablePath(target, true);
     if (args.to_trash !== undefined && typeof args.to_trash !== 'boolean') throw new Error('to_trash 必须是布尔值。');
     await preflightTree(files, args.workspace_id, args.path);
     checkAgentPermission(files, args.workspace_id, 'allowFileManagement'); files.resolve(args.path);
@@ -120,6 +130,8 @@ export async function managePath(files, name, args) {
   }
   const src = files.resolve(args.src), dst = files.resolve(args.dst, true);
   rootMutation(files, src); rootMutation(files, dst);
+  files.assertWritablePath(src, true);
+  files.assertWritablePath(dst, true);
   const a = path.relative(src, dst), b = path.relative(dst, src);
   const nested = value => value === '' || (!value.startsWith('..' + path.sep) && value !== '..' && !path.isAbsolute(value));
   if (nested(a) || nested(b)) throw new Error('源和目标不能相同或互为祖先目录。');
@@ -130,11 +142,11 @@ export async function managePath(files, name, args) {
   if (exists) { await preflightTree(files, args.workspace_id, args.dst); if (fs.statSync(src).isDirectory() !== fs.statSync(dst).isDirectory()) throw new Error('覆盖时源和目标必须同为文件或同为目录。'); }
   checkAgentPermission(files, args.workspace_id, 'allowFileManagement'); files.resolve(args.src); files.resolve(args.dst, true);
   if (!exists && fs.existsSync(dst)) throw new Error('目标在准备期间已创建，请重新查询后再操作。');
-  fs.mkdirSync(path.dirname(dst), { recursive: true });
-  const backup = exists ? dst + '.argondesk-replaced-' + randomUUID() : null;
+  if (!fs.existsSync(path.dirname(dst))) fs.mkdirSync(path.dirname(dst), { recursive: true });
+  const backup = exists ? dst + '.webagy-replaced-' + randomUUID() : null;
   if (backup) fs.renameSync(dst, backup);
   try { fs.renameSync(src, dst); } catch (error) { if (backup) fs.renameSync(backup, dst); throw error; }
   let retained;
-  if (backup) { try { await recycle(backup); } catch { retained = path.relative(files.config.root, backup); } }
+  if (backup) { try { await recycle(backup); } catch { retained = path.isAbsolute(args.dst) ? backup : path.relative(files.config.root, backup); } }
   return { src: args.src, dst: args.dst, moved: true, overwritten: exists, ...(retained ? { previous_target_backup: retained } : {}) };
 }

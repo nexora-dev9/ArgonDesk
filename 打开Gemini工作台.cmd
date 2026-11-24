@@ -1,2 +1,2 @@
 @echo off
-call "%~dp0Start-ArgonDesk.cmd"
+call "%~dp0Start-WebAgy.cmd"

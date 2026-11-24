@@ -7,6 +7,8 @@ import { promisify } from 'node:util';
 import { WorkspaceFiles } from './workspace-files.mjs';
 import { Tunnel, protectSecret, unprotectSecret } from './tunnel.mjs';
 import { createOAuthAccessToken, verifyOAuthAccessToken } from './oauth.mjs';
+import { SnapshotStore } from './snapshots.mjs';
+import { listSkillSummaries, loadAlwaysOnRules, validateSkillDirs } from './skills.mjs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import express from 'express';
@@ -27,12 +29,14 @@ if (config.oauthClientSecretEncrypted) {
 }
 if (!fs.existsSync(configPath)) fs.mkdirSync(config.root, { recursive: true });
 const save = value => { fs.writeFileSync(configPath + '.tmp', JSON.stringify(value, null, 2)); fs.renameSync(configPath + '.tmp', configPath); config = value; };
-const files = new WorkspaceFiles(config, save);
+const snapshots = new SnapshotStore(stateRoot);
+const files = new WorkspaceFiles(config, save, snapshots);
 let enableOnStart = false;
 if (config.fileAutoStart === true && ['read', 'edit'].includes(config.access)) {
   try { files.resolve('.'); enableOnStart = true; } catch {}
 }
-save({ ...config, fileAutoStart: config.fileAutoStart === true, enabled: enableOnStart, workspaceId: crypto.randomUUID() });
+save({ ...config, language: config.language === 'zh-CN' ? 'zh-CN' : 'en',
+  fileAutoStart: config.fileAutoStart === true, enabled: enableOnStart, workspaceId: crypto.randomUUID() });
 files.config = config;
 const port = Number(process.env.GEMINI_WORKSPACE_PORT || 3008);
 const origin = `http://127.0.0.1:${port}`;
@@ -51,10 +55,11 @@ const app = express();
 app.disable('x-powered-by');
 app.use(express.json({ limit: '3mb' }));
 app.use(express.urlencoded({ extended: false, limit: '8kb' }));
+const activePublicBase = () => tunnel.currentPublicBase() || config.publicBase || '';
 const publicHost = () => {
-  try { return config.publicBase ? new URL(config.publicBase).host : ''; } catch { return ''; }
+  try { const value = activePublicBase(); return value ? new URL(value).host : ''; } catch { return ''; }
 };
-const publicInfoPaths = new Set(['/.well-known/google-connected-apps', '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/privacy', '/terms', '/help']);
+const publicInfoPaths = new Set(['/.well-known/google-connected-apps', '/.well-known/oauth-authorization-server', '/.well-known/oauth-protected-resource', '/privacy', '/terms', '/help', '/favicon.ico', '/app-icon-512.png', '/app-icon.svg', '/apple-touch-icon.png']);
 const publicPostPaths = new Set(['/oauth/token']);
 app.use((req, res, next) => {
   res.set('X-Content-Type-Options', 'nosniff');
@@ -68,14 +73,14 @@ app.use((req, res, next) => {
   if (req.method !== 'GET' && req.get('x-workspace-csrf') !== csrf) return res.sendStatus(403);
   next();
 });
-app.get('/healthz', (_req, res) => res.json({ app: 'gemini-workspace', version: '0.4.6', language: config.language || 'zh-CN', ready: true, pid: process.pid }));
+app.get('/healthz', (_req, res) => res.json({ app: 'webagy', version: '1.0.0', language: config.language, ready: true, pid: process.pid }));
 app.get('/.well-known/google-connected-apps', (req, res) => {
   const tokens = Array.isArray(config.connectedAppVerificationTokens) ? config.connectedAppVerificationTokens : [];
   if (!publicHost() || req.get('host') !== publicHost() || !tokens.length) return res.sendStatus(404);
   res.set('Cache-Control', 'no-store').json({ verification_tokens: tokens });
 });
-const publicMcpUrl = () => config.publicBase ? `${config.publicBase}/mcp` : '';
-const legacyPublicMcpUrl = () => config.publicBase ? `${config.publicBase}/mcp/${config.key}` : '';
+const publicMcpUrl = () => { const value = activePublicBase(); return value ? `${value}/mcp` : ''; };
+const legacyPublicMcpUrl = () => { const value = activePublicBase(); return value ? `${value}/mcp/${config.key}` : ''; };
 function secureEqual(left, right) {
   if (typeof left !== 'string' || typeof right !== 'string') return false;
   const a = Buffer.from(left), b = Buffer.from(right);
@@ -138,6 +143,9 @@ app.post('/oauth/token', (req, res) => {
 app.get('/privacy', (_req, res) => res.sendFile(path.join(base, 'privacy.html')));
 app.get('/terms', (_req, res) => res.sendFile(path.join(base, 'terms.html')));
 app.get('/help', (_req, res) => res.sendFile(path.join(base, 'help.html')));
+app.get('/favicon.ico', (_req, res) => res.type('image/x-icon').set('Cache-Control', 'public, max-age=86400').sendFile(path.join(base, 'app-icon.ico')));
+app.get('/app-icon-512.png', (_req, res) => res.type('image/png').set('Cache-Control', 'public, max-age=86400').sendFile(path.join(base, 'app-icon-512.png')));
+app.get('/apple-touch-icon.png', (_req, res) => res.type('image/png').set('Cache-Control', 'public, max-age=86400').sendFile(path.join(base, 'app-icon-512.png')));
 app.get('/', (_req, res) => {
   res.set('Content-Security-Policy', "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none'");
   res.sendFile(path.join(base, 'index.html'));
@@ -145,13 +153,21 @@ app.get('/', (_req, res) => {
 app.get('/app.js', (_req, res) => res.sendFile(path.join(base, 'app.js')));
 app.get('/i18n.js', (_req, res) => res.sendFile(path.join(base, 'i18n.js')));
 app.get('/style.css', (_req, res) => res.sendFile(path.join(base, 'style.css')));
-app.get('/app-icon.svg', (_req, res) => res.sendFile(path.join(base, 'app-icon.svg')));
-app.get('/api/state', (_req, res) => res.json({ ...files.info(), version: '0.4.6', language: config.language || 'zh-CN', fileAutoStart: config.fileAutoStart, publicBase: config.publicBase,
+app.get('/app-icon.svg', (_req, res) => res.type('image/svg+xml').set('Cache-Control', 'public, max-age=86400').sendFile(path.join(base, 'app-icon.svg')));
+app.get('/api/state', (_req, res) => res.json({ ...files.info(), version: '1.0.0', language: config.language, fileAutoStart: config.fileAutoStart, publicBase: config.publicBase,
+  activePublicBase: activePublicBase(),
+  enableSkills: config.enableSkills !== false,
+  enableGlobalSkills: config.enableGlobalSkills !== false,
+  enableRules: config.enableRules !== false,
+  skillDirs: config.skillDirs || [],
+  skills: listSkillSummaries(config),
+  rulesCount: loadAlwaysOnRules(config).length,
+  snapshotIds: snapshots.list().map(item => item.id),
   connectedAppVerificationConfigured: Array.isArray(config.connectedAppVerificationTokens) && config.connectedAppVerificationTokens.length > 0,
   oauthCredentialsConfigured: !!(config.oauthClientId && config.oauthClientSecretEncrypted && oauthClientSecret),
   oauthRequired: config.oauthRequired === true,
   oauthClientId: config.oauthClientId || '',
-  oauthTokenEndpoint: config.publicBase ? `${config.publicBase}/oauth/token` : '',
+  oauthTokenEndpoint: activePublicBase() ? `${activePublicBase()}/oauth/token` : '',
   csrf, localMcp: `${origin}/mcp/${config.key}`,
   registeredMcp: publicMcpUrl(), publicMcp: legacyPublicMcpUrl(), history, tunnel: tunnel.info(), traffic }));
 app.post('/api/preferences', (req, res) => {
@@ -164,7 +180,7 @@ app.post('/api/preferences', (req, res) => {
     if (typeof req.body.fileAutoStart !== 'boolean') return res.status(400).json({ error: '自动启用设置无效。' });
     changes.fileAutoStart = req.body.fileAutoStart;
   }
-  for (const key of ['allowCommands', 'allowFileManagement', 'tunnelAutoStart']) {
+  for (const key of ['allowCommands', 'allowFileManagement', 'tunnelAutoStart', 'enableSkills', 'enableGlobalSkills', 'enableRules']) {
     if (req.body[key] !== undefined) {
       if (typeof req.body[key] !== 'boolean') return res.status(400).json({ error: '权限或自动启动设置必须是布尔值。' });
       changes[key] = req.body[key];
@@ -205,7 +221,7 @@ app.post('/api/connected-apps/verification', (req, res) => {
 app.post('/api/oauth/credentials', async (_req, res) => {
   try {
     if (!config.publicBase) throw new Error('请先配置 HTTPS 域名，再生成 OAuth 凭据。');
-    const clientId = 'argondesk-' + crypto.randomBytes(12).toString('hex');
+    const clientId = 'webagy-' + crypto.randomBytes(12).toString('hex');
     const clientSecret = crypto.randomBytes(32).toString('base64url');
     const encrypted = await protectSecret(clientSecret);
     update({ oauthClientId: clientId, oauthClientSecretEncrypted: encrypted });
@@ -230,7 +246,12 @@ app.post('/api/settings', (req, res) => {
       if (value) { const url = new URL(value); if (url.protocol !== 'https:' || url.origin !== value) throw new Error('官网连接需要不含路径和密钥的 HTTPS 域名。'); }
       save({ ...config, publicBase: value }); files.config = config;
     }
-    if (req.body.access !== undefined || req.body.root !== undefined) files.configure({ root: req.body.root || config.root, access: req.body.access || config.access });
+    if (req.body.access !== undefined || req.body.root !== undefined || req.body.roots !== undefined || req.body.readOnlyRoots !== undefined) files.configure({
+      root: req.body.root || config.root,
+      access: req.body.access || config.access,
+      roots: req.body.roots ?? config.roots ?? [],
+      readOnlyRoots: req.body.readOnlyRoots ?? config.readOnlyRoots ?? []
+    });
     if (req.body.enabled !== undefined) {
       if (typeof req.body.enabled !== 'boolean') throw new Error('启用状态无效。');
       if (!req.body.enabled) files.cancelCommands();
@@ -239,14 +260,52 @@ app.post('/api/settings', (req, res) => {
     res.json({ ok: true });
   } catch (error) { res.status(400).json({ error: error.message }); }
 });
-app.post('/api/choose', async (_req, res) => {
+app.post('/api/skills/dirs', (req, res) => {
+  try {
+    const skillDirs = validateSkillDirs(req.body?.dirs ?? [], config.skillDirs);
+    update({ skillDirs });
+    res.json({ ok: true, skillDirs, skills: listSkillSummaries(config) });
+  } catch (error) { res.status(400).json({ error: error.message }); }
+});
+app.post('/api/snapshots/:id/restore', (req, res) => {
+  const started = performance.now();
+  try {
+    const result = snapshots.restore(req.params.id, files);
+    record({
+      name: 'restore_snapshot',
+      path: result.displayPath,
+      workspace: config.root,
+      time: new Date().toISOString(),
+      ok: true,
+      status: 'succeeded',
+      duration_ms: Math.round(performance.now() - started),
+      ...(result.backup_snapshot_id ? { snapshot_id: result.backup_snapshot_id } : {})
+    });
+    res.json({ ok: true, ...result });
+  } catch (error) { res.status(400).json({ error: error.message }); }
+});
+app.post('/api/choose', async (req, res) => {
   try {
     const pwsh = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe');
-    const { stdout } = await promisify(execFile)(pwsh, ['-NoProfile', '-STA', '-File', path.join(base, 'pick-folder.ps1'), '-InitialPath', config.root, '-Language', config.language || 'zh-CN'], { windowsHide: true, timeout: 300000 });
+    const initialPath = req.body?.skillDir === true && config.skillDirs?.[0] ? config.skillDirs[0] : config.root;
+    const { stdout } = await promisify(execFile)(pwsh, ['-NoProfile', '-STA', '-File', path.join(base, 'pick-folder.ps1'), '-InitialPath', initialPath, '-Language', config.language], { windowsHide: true, timeout: 300000 });
     const chosen = JSON.parse(stdout.replace(/^\uFEFF/, '').trim());
-    if (chosen.path) files.configure({ root: chosen.path });
+    if (chosen.path) {
+      if (req.body?.skillDir === true) {
+        const skillDirs = validateSkillDirs([...(config.skillDirs || []), chosen.path], config.skillDirs);
+        update({ skillDirs });
+      } else if (req.body?.add === true) files.configure({ roots: [...(config.roots || []), chosen.path] });
+      else files.configure({ root: chosen.path });
+    }
     res.json({ ok: true, cancelled: !chosen.path });
   } catch (error) { res.status(400).json({ error: error.message }); }
+});
+app.post('/api/tunnel/install-cloudflared', async (_req, res) => {
+  try {
+    const pwsh = path.join(process.env.SystemRoot || 'C:\\Windows', 'System32/WindowsPowerShell/v1.0/powershell.exe');
+    await promisify(execFile)(pwsh, ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(base, 'Install-Tunnel.ps1'), '-Provider', 'cloudflared'], { windowsHide: true, timeout: 180000 });
+    res.json({ ok: true, tunnel: tunnel.info() });
+  } catch (error) { res.status(400).json({ error: error.stderr?.trim() || error.message || '安装 cloudflared 失败。' }); }
 });
 app.post('/api/tunnel/configure', async (req, res) => {
   try { await tunnel.configure(req.body); res.json({ ok: true }); }
@@ -267,16 +326,21 @@ app.post('/api/connection/rotate-key', async (_req, res) => {
   res.json({ ok: true });
 });
 app.post('/api/diagnostics', async (_req, res) => {
-    const client = new Client({ name: 'ArgonDesk-local-check', version: '0.4.6' });
+    const client = new Client({ name: 'WebAgy-local-check', version: '1.0.0' });
   try {
     await client.connect(new StreamableHTTPClientTransport(new URL(`${origin}/mcp/${config.key}`)));
     const tools = (await client.listTools()).tools;
+    const tInfo = tunnel.info();
+    const wsInfo = files.info();
+    const providerLabel = tInfo.provider === 'cloudflared' ? 'cloudflared' : 'ngrok';
+    const primaryOk = fs.existsSync(wsInfo.workspace);
+    const offlineCount = (wsInfo.unavailable_roots || []).length;
     res.json({ ok: true, checkedAt: new Date().toISOString(), checks: [
       { label: '本地文件服务', ok: true, detail: '标准 MCP 握手成功' },
       { label: '工作区工具', ok: tools.length === definitions.length, detail: `${tools.length} 项工具可被发现` },
-      { label: '工作区状态', ok: fs.existsSync(config.root), detail: config.enabled ? '文件工具已启用' : '文件工具已暂停' },
-      { label: 'ngrok 客户端', ok: tunnel.info().installed, detail: tunnel.info().installed ? '已安装' : '尚未安装' },
-      { label: 'ngrok 账户令牌', ok: tunnel.info().configured, detail: tunnel.info().configured ? 'Windows 加密保存' : '尚未保存' },
+      { label: '工作区状态', ok: primaryOk && offlineCount === 0, detail: !primaryOk ? '主文件夹不存在' : offlineCount ? `主目录正常，${offlineCount} 个附加目录未挂载` : config.enabled ? '文件工具已启用' : '文件工具已暂停' },
+      { label: `${providerLabel} 客户端`, ok: tInfo.installed, detail: tInfo.installed ? '已安装' : '尚未安装' },
+      { label: `${providerLabel} 凭据`, ok: tInfo.configured, detail: tInfo.provider === 'cloudflared' && tInfo.cloudflareMode === 'quick' ? '快速临时隧道无需令牌' : tInfo.configured ? 'Windows 加密保存' : '尚未保存' },
       { label: '官网 HTTPS 连接', ok: tunnel.status === 'online', detail: tunnel.error || (tunnel.status === 'online' ? '隧道在线，官网实际调用仍需验证' : '当前未连接') }
     ] });
   } catch { res.status(500).json({ error: '本地 MCP 检查未完成，请重启工作台后重试。' }); }
@@ -285,9 +349,9 @@ app.post('/api/diagnostics', async (_req, res) => {
 app.post('/api/shutdown', async (_req, res) => { update({ enabled: false }); await files.cancelCommands(); await tunnel.stop(); res.json({ ok: true }); setTimeout(() => process.exit(0), 100); });
 
 const bound = { workspace_id: z.string().describe('Current ID from workspace_info.') };
-const relative = z.string().describe('Path relative to the selected folder; no absolute paths or parent traversal.');
+const relative = z.string().describe('Path relative to the primary folder, or an absolute path within a root listed by workspace_info. Parent traversal is forbidden.');
 const definitions = [
-  ['workspace_info', 'Get the selected folder, access and workspace_id once per task, then reuse the ID. For a new file, write_file(mode=create) can follow directly.', {}],
+  ['workspace_info', 'Get all authorized roots, access and workspace_id once per task, then reuse the ID. For other roots use full absolute paths (e.g. D:\\folder\\file.txt); relative paths still refer to the primary folder.', {}],
   ['list_files', 'List a folder when needed. Returns entries and next_offset; follow pagination to see all files.', { ...bound, path: relative.default('.'), offset: z.number().int().min(0).default(0), limit: z.number().int().min(1).max(1000).default(500) }],
   ['read_file', 'Read text of any size, DOCX/PDF/PPTX/XLSX/OpenDocument/RTF/EPUB, images, NPY/NPZ or ZIP. Use returned next_cursor to continue text. Document text lists embedded images; view=image with image_index reads one, or page (1-based) renders a PDF page. Other binary formats return bounded base64 bytes; this does not decode their meaning. Writes already confirm saving.', {
     ...bound, path: relative, offset: z.number().int().min(0).default(0), lines: z.number().int().min(1).max(1000).default(200),
@@ -299,15 +363,33 @@ const definitions = [
   ['write_file', 'Save complete UTF-8 content once, preserving animation and interactivity. create refuses existing files; rewrite replaces; append adds. Missing parent folders are created.', { ...bound, path: relative, content: z.string(), mode: z.enum(['create', 'rewrite', 'append']).default('rewrite') }],
   ['edit_file', 'Batch up to 50 unique replacements in one file; all must match before writing. Use edits, or a single old_text/new_text pair.', { ...bound, path: relative, old_text: z.string().min(1).optional(), new_text: z.string().optional(), edits: z.array(z.object({ old_text: z.string().min(1), new_text: z.string() })).min(1).max(50).optional() }],
   ['create_directory', 'Create a folder inside the workspace, including missing parents.', { ...bound, path: relative }],
-  ['find_files', 'Find files by glob or filename fragment, relative to the selected root. Skips node_modules, .venv, .git, __pycache__, dist and build, and never follows links.', { ...bound, pattern: z.string().min(1).max(1024), path: relative.default('.'), max_results: z.number().int().min(1).max(1000).default(200) }],
+  ['find_files', 'Find files by glob or filename fragment under the selected authorized root/path. When using a nonprimary root, provide an absolute path. Skips node_modules, .venv, .git, __pycache__, dist and build, and never follows links.', { ...bound, pattern: z.string().min(1).max(1024), path: relative.default('.'), max_results: z.number().int().min(1).max(1000).default(200) }],
   ['search_text', 'Search plain-text files for a literal or JavaScript regex. Returns workspace-relative paths, 1-based line numbers and matching text. Skips dependency/build folders, binary files and links; check truncation counters.', { ...bound, query: z.string().min(1).max(4096), path: relative.default('.'), regex: z.boolean().default(false), case_sensitive: z.boolean().default(false), max_results: z.number().int().min(1).max(1000).default(100) }],
   ['move_path', 'Move or rename a file/directory within the root; creates parents. Requires edit and file-management permission. No overwrite by default; overwrites retain/recycle the previous target. Root/overlapping paths/links are rejected.', { ...bound, src: relative, dst: relative, overwrite: z.boolean().default(false) }],
   ['delete_path', 'Delete a file/directory within the root. Requires edit and file-management permission. Defaults to Windows Recycle Bin and never falls back to permanent deletion. to_trash=false explicitly requests permanent deletion. The root and links are rejected.', { ...bound, path: relative, to_trash: z.boolean().default(true) }],
-  ['run_command', 'Run a PowerShell command in a validated workspace cwd. Requires edit and separate command permission. Returns exit_code/stdout/stderr; output is bounded and timeouts kill the process tree. This is current-user shell access, not filesystem sandboxing: command text can access paths outside cwd.', { ...bound, command: z.string().min(1).max(8000), cwd: relative.default('.'), timeout_sec: z.number().int().min(1).max(600).default(120) }]
+  ['run_command', 'Run a PowerShell command in a validated workspace cwd. Requires edit and separate command permission. Returns exit_code/stdout/stderr; output is bounded and timeouts kill the process tree. This is current-user shell access, not filesystem sandboxing: command text can access paths outside cwd.', { ...bound, command: z.string().min(1).max(8000), cwd: relative.default('.'), timeout_sec: z.number().int().min(1).max(600).default(120) }],
+  ['read_skill', 'Read a local skill SKILL.md and its bundled resource list, or read a specific relative resource_path inside that skill folder. Call this when the user request matches a skill description in workspace_info.skills or when the user explicitly names a skill.', { ...bound, name: z.string().min(1).max(128).describe('Exact skill name from workspace_info.skills.'), resource_path: z.string().min(1).max(512).optional().describe('Optional relative path inside the skill folder (for example references/guide.md).') }]
 ];
+const PUBLIC_FALLBACK_ICON = 'https://raw.githubusercontent.com/nexora-dev9/WebAgy/main/app-icon-512.png';
+const fallbackIconDataUri = fs.existsSync(path.join(base, 'app-icon.svg'))
+  ? 'data:image/svg+xml;base64,' + fs.readFileSync(path.join(base, 'app-icon.svg')).toString('base64')
+  : '';
+function serverIcons() {
+  const baseUrl = activePublicBase();
+  if (baseUrl && !/\.ngrok-free\.(?:dev|app|io)$/i.test(new URL(baseUrl).hostname)) {
+    return [
+      { src: `${baseUrl}/app-icon-512.png`, mimeType: 'image/png', sizes: ['512x512'] },
+      { src: `${baseUrl}/app-icon.svg`, mimeType: 'image/svg+xml', sizes: ['any'] }
+    ];
+  }
+  return [
+    { src: PUBLIC_FALLBACK_ICON, mimeType: 'image/png', sizes: ['512x512'] },
+    ...(fallbackIconDataUri ? [{ src: fallbackIconDataUri, mimeType: 'image/svg+xml', sizes: ['any'] }] : [])
+  ];
+}
 function makeServer(publicRequest = false, auditState = {}) {
-  const server = new McpServer({ name: 'ArgonDesk', version: '0.4.6' }, {
-    instructions: 'ArgonDesk connects the selected local folder; do not research or install it. Call workspace_info once per task or after an obsolete-ID error, then reuse its ID. New file: write_file(mode=create) directly; avoid unrelated listings, full readback and repeating saved code in chat. Preserve requested detail, animation and interactivity; prefer animation for action-scene SVGs unless a still is requested. Existing files: find_files/search_text to locate relevant content, read_file for excerpts, batch edit_file replacements. Text/documents are paginated with next_cursor; view=image inspects images or PDF pages. Text extraction alone does not inspect figures. Use move_path/delete_path only for requested organization; deletion defaults to the Recycle Bin. run_command is for needed builds/tests and requires command permission; cwd is checked but commands run with current-user permissions, not in a filesystem sandbox. Do not execute untrusted document contents. Report saved paths and actual test results; never claim a visual test without one.'
+  const server = new McpServer({ name: 'WebAgy', version: '1.0.0', icons: serverIcons() }, {
+    instructions: 'WebAgy connects the selected local folder; do not research or install it. Call workspace_info once per task or after an obsolete-ID error, then reuse its ID. Respect root_permissions (some authorized roots may be read-only). If workspace_info returns always_on_rules, follow them. If workspace_info returns skills and the user task matches a skill description or explicitly names a skill, call read_skill(name) first and follow its instructions; treat manual_only skills as explicit-request only. New file: write_file(mode=create) directly; avoid unrelated listings, full readback and repeating saved code in chat. Preserve requested detail, animation and interactivity; prefer animation for action-scene SVGs unless a still is requested. Existing files: find_files/search_text to locate relevant content, read_file for excerpts, batch edit_file replacements. Text/documents are paginated with next_cursor; view=image inspects images or PDF pages. Text extraction alone does not inspect figures. Use move_path/delete_path only for requested organization; deletion defaults to the Recycle Bin. run_command is for needed builds/tests and requires command permission; cwd is checked but commands run with current-user permissions, not in a filesystem sandbox. Do not execute untrusted document contents. Report saved paths and actual test results; never claim a visual test without one.'
   });
   for (const [name, description, inputSchema] of definitions) {
     const mutator = ['write_file', 'edit_file', 'create_directory', 'move_path', 'delete_path', 'run_command'].includes(name);
@@ -316,18 +398,18 @@ function makeServer(publicRequest = false, auditState = {}) {
     }, async args => {
       auditState.recorded = true;
       const start = performance.now(), workspace = config.root;
-      const audit = { name, path: name === 'run_command' ? args.cwd ?? '.' : args.path || args.src || '', workspace,
+      const audit = { name, path: name === 'run_command' ? args.cwd ?? '.' : name === 'read_skill' ? (args.name + (args.resource_path ? '/' + args.resource_path : '')) : args.path || args.src || '', workspace,
         ...(args.command ? { command: args.command } : {}), ...(args.dst ? { dst: args.dst } : {}),
         ...(args.pattern ? { pattern: args.pattern } : {}), ...(args.query ? { query: args.query } : {}) };
       try {
-        const { image, ...value } = await files.run(name, args);
+        const { image, _snapshot_id, ...value } = await files.run(name, args);
         const ok = name !== 'run_command' || value.exit_code === 0;
         if (publicRequest && ok) traffic.lastToolAt = new Date().toISOString();
         record({ ...audit, time: new Date().toISOString(), ok, status: value.timed_out ? 'timed_out' : value.cancelled ? 'cancelled' : ok ? 'succeeded' : 'failed', duration_ms: Math.round(performance.now() - start),
-          ...(name === 'run_command' ? { exit_code: value.exit_code } : {}), ...(value.edits_applied ? { edits: value.edits_applied } : {}) });
+          ...(name === 'run_command' ? { exit_code: value.exit_code } : {}), ...(value.edits_applied ? { edits: value.edits_applied } : {}), ...(_snapshot_id ? { snapshot_id: _snapshot_id } : {}) });
         return { content: [{ type: 'text', text: JSON.stringify(value) }, ...(image ? [{ type: 'image', ...image }] : [])], isError: !ok };
       } catch (error) {
-        record({ ...audit, time: new Date().toISOString(), ok: false, status: /暂停|只读|工作区已切换|未开启|不允许|禁止|超出工作区|只接受/.test(error.message) ? 'denied' : 'failed', error: error.message.slice(0, 500), duration_ms: Math.round(performance.now() - start) });
+        record({ ...audit, time: new Date().toISOString(), ok: false, status: /暂停|只读|工作区已切换|未开启|不允许|禁止|超出工作区|只接受|已关闭/.test(error.message) ? 'denied' : 'failed', error: error.message.slice(0, 500), duration_ms: Math.round(performance.now() - start) });
         return { isError: true, content: [{ type: 'text', text: error.message }] };
       }
     });
@@ -386,7 +468,7 @@ app.all('/mcp/:key?', async (req, res) => {
 });
 app.use((error, _req, res, _next) => { res.status(error.status === 413 ? 413 : 400).json({ error: '请求格式不正确或超过大小限制。' }); });
 app.listen(port, '127.0.0.1', () => {
-  console.log(JSON.stringify({ app: 'gemini-workspace', origin, workspace: config.root, enabled: config.enabled }));
+  console.log(JSON.stringify({ app: 'webagy', origin, workspace: config.root, enabled: config.enabled }));
   if (config.tunnelAutoStart) tunnel.start().catch(() => {});
 });
 process.on('exit', () => { files.cancelCommands(); tunnel.child?.kill(); });

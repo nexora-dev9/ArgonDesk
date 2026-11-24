@@ -125,7 +125,7 @@ internal static class WorkspaceHost
         var watcher = new Thread(() => { try { parent.WaitForExit(); Environment.Exit(130); } catch { Environment.Exit(130); } });
         watcher.IsBackground = true; watcher.Start();
         string script = "$ProgressPreference='SilentlyContinue'; [Console]::OutputEncoding = New-Object Text.UTF8Encoding($false); $OutputEncoding = [Console]::OutputEncoding; $ErrorActionPreference='Stop'; $global:LASTEXITCODE=0;\ntry { & {\n" + Convert.ToString(request["command"]) +
-            "\n}; $argonOk=$?; if ($LASTEXITCODE -ne 0) {exit $LASTEXITCODE}; if (!$argonOk) {exit 1} } catch { [Console]::Error.WriteLine($_.ToString()); exit 1 }";
+            "\n}; $webAgyOk=$?; if ($LASTEXITCODE -ne 0) {exit $LASTEXITCODE}; if (!$webAgyOk) {exit 1} } catch { [Console]::Error.WriteLine($_.ToString()); exit 1 }";
         var shell = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.System), "WindowsPowerShell\\v1.0\\powershell.exe");
         var info = new ProcessStartInfo(shell, "-NoLogo -NoProfile -NonInteractive -OutputFormat Text -ExecutionPolicy Bypass -EncodedCommand " + Convert.ToBase64String(Encoding.Unicode.GetBytes(script)));
         info.UseShellExecute = false; info.CreateNoWindow = true; info.WorkingDirectory = Convert.ToString(request["cwd"]);
@@ -145,6 +145,6 @@ internal static class WorkspaceHost
             if (args.Length == 1 && args[0] == "trash") return Recycle(Convert.ToString(request["path"]));
             if (args.Length == 1 && args[0] == "run") return Run(request);
             throw new ArgumentException("Unsupported helper operation.");
-        } catch (Exception error) { Console.Error.WriteLine("ARGONDESK_HOST: " + error.Message); return 1; }
+        } catch (Exception error) { Console.Error.WriteLine("WEBAGY_HOST: " + error.Message); return 1; }
     }
 }

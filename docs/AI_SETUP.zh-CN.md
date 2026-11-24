@@ -1,18 +1,18 @@
-# 让其他智能体协助安装 ArgonDesk
+# 让其他智能体协助安装 WebAgy
 
 [English](AI_SETUP.md)
 
-如果你的想法是“让 Gemini 官网对话直接读写我选的本地文件夹，不另买模型 API”，本项目提供 Windows 原生 MCP 工作台。11 项工具包含检索、读写、移动/回收站删除和独立授权的 PowerShell 构建测试；命令是当前用户权限，不是限定目录的系统沙箱。详细参数见 [AGENT_TOOLS.zh-CN.md](AGENT_TOOLS.zh-CN.md)。
+WebAgy 通过原生 MCP 和符合条件的账号，让 Gemini 网页 Chat 与 Task 操作 Windows 工作区。12 项工具涵盖读写、检索、整理、本地 Skills 和独立授权的 PowerShell 构建测试。命令继承当前 Windows 用户权限。详见[工具参数](AGENT_TOOLS.zh-CN.md)。
 
 公开后，把仓库地址和以下说明发给编程智能体，让它读当前文档，不要套用别人的运行配置：
 
-> 请在这台 Windows 电脑部署 ArgonDesk，让我的 Gemini 网页对话仅在我选择的文件夹里读写。使用已有且具备功能的官网账户，不购买模型 API。先读 README、SETUP、SECURITY 和 NETWORKING。能替我执行的本地步骤直接完成并验证；账号登录等确实需要我时再明确说明。不要打印或上传令牌、完整私人 MCP URL、浏览器状态或真实项目内容。未经我授权具体变更，保留现有网络设置。分别验证各层连接，再让 Gemini 在空白测试目录里新建唯一名称的文件，由我批准写入并读回。最后报告已通过与尚未验证的项目。
+> 请在这台 Windows 电脑部署 WebAgy，让我的 Gemini 网页对话仅在我选择的文件夹里读写。使用已有且具备功能的官网账户，不购买模型 API。先读 README、SETUP、SECURITY 和 NETWORKING。能替我执行的本地步骤直接完成并验证；账号登录等确实需要我时再明确说明。不要打印或上传令牌、完整私人 MCP URL、浏览器状态或真实项目内容。未经我授权具体变更，保留现有网络设置。分别验证各层连接，再让 Gemini 在空白测试目录里新建唯一名称的文件，由我批准写入并读回。最后报告已通过与尚未验证的项目。
 
 ## 核对要点
 
 - 确认 Windows 条件以及账号确实有自定义 Connected Apps。
 - 使用干净源码或发布包，不复制已使用安装的状态。
-- 首次用 Start-ArgonDesk.cmd 准备官方客户端并验证签名。
+- 首次用 Start-WebAgy.cmd 准备官方客户端并验证签名。
 - 由使用者选择目录和权限，尊重暂停及编号更新。
 - 用自己的 ngrok 域名和令牌，本地填写，不在聊天索要秘密。
 - 普通自定义应用使用私人 MCP URL；免逐次确认的注册式应用使用 OAuth 区域显示的独立 endpoint。

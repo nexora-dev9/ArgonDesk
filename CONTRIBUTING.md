@@ -2,7 +2,7 @@
 
 [简体中文](CONTRIBUTING.zh-CN.md)
 
-ArgonDesk is an MIT-licensed preview. Focused fixes, reproducible reports, documentation and narrowly tested integrations are welcome. See the [roadmap](docs/ROADMAP.md) before proposing a large change.
+WebAgy is an MIT-licensed preview. Focused fixes, reproducible reports, documentation and narrowly tested integrations are welcome. See the [roadmap](docs/ROADMAP.md) before proposing a large change.
 
 Use Windows x64, Node.js 22+, PowerShell 5.1, .NET Framework 4.x and Edge. Run `npm ci --ignore-scripts`, then `npm test`. Build the desktop entry with `.\Build.ps1`; `.\Setup.ps1` also downloads and verifies the ngrok client.
 
@@ -20,6 +20,6 @@ For a tunnel provider, distinguish documentation research, protocol checks and a
 
 A PR should explain the trigger, resulting behavior, checks and unverified limits. Use synthetic files and demonstration screenshots. Exclude credentials, real paths, private URLs and personal conversations.
 
-Public packages include Node.js/runtime dependencies, but not ngrok; `Start-ArgonDesk.cmd` downloads the signed client from the official source. Build with the intended Node version and retain its matching license. Generated `dist/`, `.local/`, `node_modules/` and EXEs stay out of source commits.
+Public packages include Node.js/runtime dependencies, but not ngrok; `Start-WebAgy.cmd` downloads the signed client from the official source. Build with the intended Node version and retain its matching license. Generated `dist/`, `.local/`, `node_modules/` and EXEs stay out of source commits.
 
 Contributions use MIT. Retain third-party provenance and licenses. Do not copy another project's UI assets or claim ownership of service clients.

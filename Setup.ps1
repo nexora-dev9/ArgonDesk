@@ -8,5 +8,5 @@ try {
     & npm.cmd ci --ignore-scripts --no-audit --no-fund --cache (Join-Path $PSScriptRoot '.local\npm-cache')
     if ($LASTEXITCODE) { throw 'Dependency installation failed.' }
     & (Join-Path $PSScriptRoot 'Install-Tunnel.ps1')
-    Write-Output 'Setup complete. Open Start-ArgonDesk.cmd.'
+    Write-Output 'Setup complete. Open Start-WebAgy.cmd.'
 } finally { Pop-Location }

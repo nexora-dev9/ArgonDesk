@@ -2,21 +2,21 @@
 
 [English](NETWORKING.md)
 
-Gemini 原生自定义应用需要能访问的 HTTPS MCP 入口，无法直接访问你电脑的 localhost。隧道负责传输请求，工作区权限仍由 ArgonDesk 强制检查。
+Gemini 原生自定义应用需要能访问的 HTTPS MCP 入口，无法直接访问你电脑的 localhost。隧道负责传输请求，工作区权限仍由 WebAgy 强制检查。
 
 ## 本版支持范围
 
 | 方案 | 本版状态 | 条件与取舍 |
 | --- | --- | --- |
 | ngrok 分配的开发域名 | 已集成并验证 | 自己的账户与令牌；软件管理进程和状态；受服务额度限制 |
-| Cloudflare 固定隧道 | 后续接入方向 | 受控稳定域名、账户配置、专用凭据和路由适配 |
-| Cloudflare Quick Tunnel | 研究或临时测试方案 | 地址会变化，不适合固定注册；还需验证协议限制 |
+| Cloudflare Named Tunnel | 已集成 | 自己的 Cloudflare 域名与隧道令牌，把服务路由到 `http://127.0.0.1:3008` |
+| Cloudflare Quick Tunnel | 已集成，适合临时测试 | 无需 Cloudflare 账号，地址改变后可能需要在 Gemini 重新连接 |
 | 自有 HTTPS 反代或服务器加反向转发 | 高级设计方案 | 自己维护 TLS、访问限制、转发和生命周期 |
 | 本地浏览器扩展桥接 | 另一种架构 | 可不开放公网 MCP，但依赖扩展执行工具及网页兼容性 |
 
-当前只有 ngrok 有完整集成。不要把其他域名填进 ngrok 设置就认为已经支持；域名校验有意只接受 ngrok。没有声称其他方案已具备安装器或通过 Gemini 官网验收。
+在「连接设置」选择提供方。面板可以下载并验证官方 `cloudflared` 安装文件。Quick 自动取得临时地址，Named 填入自己路由好的 HTTPS 域名和隧道令牌。启动后复制本次连接生成的 MCP 地址。
 
-[Cloudflare 官方说明](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)指出 Quick Tunnel 使用临时地址、无稳定性保证，也不支持 SSE。ArgonDesk 使用 JSON 响应，但仅凭这一点不能认定官网完整流程兼容。后续适配仍需保留私人路径、面板隔离、Host 校验、稳定连接身份，并真正验证批准写入和读回。
+[Cloudflare 官方说明](https://developers.cloudflare.com/tunnel/get-started/quick-tunnels/)指出 Quick Tunnel 使用临时地址，无稳定性保证，也不支持 SSE。固定 MCP 地址可选 Named 或 ngrok。Cloudflare 本地自动化使用模拟客户端，官网读写请用自己的隧道和账号验收。
 
 WebCodex 的连接流程可以作为参考，其特定提供方的传输实现不能直接当成本软件的连接功能。
 

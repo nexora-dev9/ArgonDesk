@@ -20,7 +20,7 @@ const write = (name, text) => { const target = path.join(root, name); fs.mkdirSy
 const read = name => fs.readFileSync(path.join(root, name), 'utf8');
 const check = async (name, action) => { await action(); checks.push({ name, passed: true }); };
 const denied = action => assert.rejects(async () => action());
-const host = path.join(project, 'ArgonDesk.WorkspaceHost.exe');
+const host = path.join(project, 'WebAgy.WorkspaceHost.exe');
 if (!fs.existsSync(host) || fs.statSync(host).mtimeMs < fs.statSync(path.join(project, 'native', 'WorkspaceHost.cs')).mtimeMs) {
   const build = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-File', path.join(project, 'Build.ps1'), '-ToolsOnly'], { cwd: project, windowsHide: true, encoding: 'utf8' });
   assert.equal(build.status, 0, build.stderr + build.stdout);
@@ -167,10 +167,11 @@ try {
   await client.connect(new StreamableHTTPClientTransport(new URL(state.localMcp)));
   const call = (name,args={}) => client.callTool({ name, arguments:{workspace_id:state.workspace_id,...args} });
   const value = result => JSON.parse(result.content[0].text);
-  await check('Real MCP exposes eleven tools with validated defaults and correct mutation hints', async () => {
-    const tools = (await client.listTools()).tools; assert.equal(tools.length,11);
+  await check('Real MCP exposes twelve tools with validated defaults and correct mutation hints', async () => {
+    const tools = (await client.listTools()).tools; assert.equal(tools.length,12);
     assert.equal(tools.find(v=>v.name==='run_command').annotations.openWorldHint,true);
     assert.equal(tools.find(v=>v.name==='find_files').annotations.readOnlyHint,true);
+    assert.equal(tools.find(v=>v.name==='read_skill').annotations.readOnlyHint,true);
     assert.equal(tools.find(v=>v.name==='delete_path').inputSchema.properties.to_trash.default,true);
     assert.equal((await call('run_command',{command:'Write-Output DENIED'})).isError,true);
     assert.equal((await call('delete_path',{path:'target.txt'})).isError,true);
