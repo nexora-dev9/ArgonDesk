@@ -108,8 +108,15 @@ await check('Management rejects the root, absolute paths, traversal, overlap and
 await check('Default deletion uses the Windows Recycle Bin; permanent deletion requires explicit false', async () => {
   const filename = 'recycle-proof-' + randomUUID() + '.txt'; write(filename, 'RECYCLE_PROOF');
   const result = await run('delete_path', { path: filename }); assert.equal(result.to_trash, true); assert.equal(fs.existsSync(path.join(root, filename)), false);
-  const shell = spawnSync('powershell.exe', ['-NoProfile','-NonInteractive','-Command', '$shell = New-Object -ComObject Shell.Application; @($shell.Namespace(10).Items() | ForEach-Object { $_.Name }) | ConvertTo-Json -Compress'], { windowsHide: true, encoding: 'utf8' });
-  assert.equal(shell.status, 0); assert.ok(shell.stdout.includes(filename), 'Deleted fixture must be visible in the Recycle Bin');
+  // The helper already requires a recycled Shell item before it reports success.
+  // The desktop check also verifies visibility in Explorer, which the hosted runner lacks.
+  if (process.env.GITHUB_ACTIONS !== 'true') {
+    const shell = spawnSync('powershell.exe', ['-NoProfile', '-NonInteractive', '-Command',
+      '$shell = New-Object -ComObject Shell.Application; @($shell.Namespace(10).Items() | ForEach-Object { $_.Name }) | ConvertTo-Json -Compress'
+    ], { windowsHide: true, encoding: 'utf8' });
+    assert.equal(shell.status, 0);
+    assert.ok(shell.stdout.includes(filename), 'Deleted fixture must be visible in the Recycle Bin');
+  }
   write('permanent/nested/test.txt', 'TEST_ONLY'); const deleted = await run('delete_path', { path: 'permanent', to_trash: false }); assert.equal(deleted.to_trash, false); assert.equal(fs.existsSync(path.join(root, 'permanent')), false);
 });
 await check('Command execution refuses disabled permissions, read-only, stale IDs and unsafe cwd', async () => {
